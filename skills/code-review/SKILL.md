@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 現在の差分をレビューして correctness バグと reuse/simplification/efficiency の整理を検出する。外部レビュー CLI（codex 等）が使えるならそこへ委譲し、使えないときはレンズを分けた複数のサブエージェントで多角的に読む。「差分をレビューして」「この変更を見て」等と言われたとき、および ship / issue-loop のレビュー工程で使う。
+description: 現在の差分をレビューして correctness バグと reuse/simplification/efficiency の整理を検出する。外部レビュー CLI（codex 等）が使えるならそこへ委譲し、使えないときはレンズを分けた複数のサブエージェントで多角的に読む。「差分をレビューして」「この変更を見て」等と言われたとき、および ship-session / issue-loop のレビュー工程で使う。
 ---
 
 # code-review — 差分をレビューする
