@@ -8,7 +8,7 @@
 
 ```bash
 claude plugin marketplace add insession-space/claude-ship
-claude plugin install ship@claude-ship
+claude plugin install ship-session@claude-ship
 ```
 
 Claude Code を再起動すると使えます。
@@ -16,7 +16,7 @@ Claude Code を再起動すると使えます。
 ## 使う
 
 ```
-/ship ダークモードの切り替えを設定画面に足したい
+/ship-session:ship-session ダークモードの切り替えを設定画面に足したい
 ```
 
 あるいは普通に頼むだけでも起動します。
@@ -28,7 +28,7 @@ Claude Code を再起動すると使えます。
 到達点を言い添えると、そこを聞かれずに進みます。
 
 ```
-/ship 検索が遅いので直したい。PR まで作って
+/ship-session:ship-session 検索が遅いので直したい。PR まで作って
 ```
 
 ## 何が起きるか
@@ -55,12 +55,12 @@ Phase 3  止まった地点に応じて、次の選択肢を出す
 
 | スキル | 役割 | 単体でも使えるか |
 | --- | --- | --- |
-| `ship` | 到達点の合意 → Issue 化 → 実装ループ → 次アクション提示 | — |
+| `ship-session` | 到達点の合意 → Issue 化 → 実装ループ → 次アクション提示 | — |
 | `create-issue` | 要件と仕様を深掘りして Issue を作る（作成のみ） | ✔ |
 | `issue-loop` | 1つのチケットを停止条件まで反復実装する | ✔ |
 | `code-review` | 差分をレビューする | ✔ |
 
-`ship` は下3つに委譲します。単体でも使えるので、「Issue だけ作りたい」「差分だけ見てほしい」ときは直接呼べます。
+`ship-session` は下3つに委譲します。単体でも使えるので、「Issue だけ作りたい」「差分だけ見てほしい」ときは直接呼べます。
 
 ## 前提
 
