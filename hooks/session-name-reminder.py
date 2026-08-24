@@ -11,6 +11,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -19,6 +20,27 @@ HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 #: 促す回数の上限。際限なく促すと邪魔になる
 ASK_LIMIT = 3
+
+#: `AppleLocale` の言語コードを、促し文にそのまま埋められる呼び名に直す。
+#: **網羅は狙わない。** 表に無いコードはそのまま埋めれば意味は通る
+LANGUAGE_NAMES = {
+    "ja": "日本語",
+    "en": "English",
+    "ko": "Korean",
+    "zh": "Chinese",
+    "fr": "French",
+    "de": "German",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "ru": "Russian",
+}
+
+#: 言語コードらしさ（`ja` / `en-US` / `fr_CA`）。呼び名と見分けるためだけに使う
+CODE_RE = re.compile(r"^[A-Za-z]{2,3}([-_][A-Za-z]{2,4})?$")
+
+#: 自動生成の名前の形（`fix-login-bug`）。人が付けた名前と見分けるのに使う
+KEBAB_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def resolve_pid(session_id):
@@ -90,18 +112,20 @@ def state_of(job_dir):
         return None
 
 
-def is_japanese():
-    """表示言語が日本語か。判定できなければ False（＝促さない）。"""
+def display_language():
+    """表示言語の呼び名を返す。**判定できなければ英語**（黙らない）。
+
+    優先順位は Claude Code の設定に合わせる:
+    `settings.local.json` → `settings.json` の `language` → `AppleLocale`。
+    """
     for name in ("settings.local.json", "settings.json"):
         try:
             with open(os.path.join(HOME, name)) as f:
                 lang = json.load(f).get("language")
         except Exception:
             continue
-        if not lang:
-            continue
-        lang = str(lang).strip().lower()
-        return lang.startswith("ja") or "日本語" in lang or "japanese" in lang
+        if lang:
+            return language_name(str(lang))
     try:
         locale = subprocess.run(
             ["defaults", "read", "-g", "AppleLocale"],
@@ -109,9 +133,39 @@ def is_japanese():
             text=True,
             timeout=3,
         )
-        return locale.returncode == 0 and locale.stdout.strip().lower().startswith("ja")
+        if locale.returncode == 0:
+            return language_name(locale.stdout)
     except Exception:
-        return False
+        pass
+    return "English"
+
+
+def language_name(value):
+    """設定の値を、促し文にそのまま埋められる呼び名に直す。
+
+    **言語コードのときだけ直す。** `language` は自由記述で、
+    `ja` のようなコードも `日本語` / `Français` のような呼び名も来る。
+    後者をコード表に通すと元の綴りを壊すので、形で見分ける。
+    """
+    value = value.strip()
+    if not value:
+        return "English"
+    if CODE_RE.match(value):
+        code = re.split(r"[-_]", value)[0].lower()
+        return LANGUAGE_NAMES.get(code, code)
+    return value
+
+
+def is_japanese(language):
+    """その呼び名が日本語を指すか。
+
+    **前方一致では見ない。** `language` は自由記述で、`Javanese` のように
+    `ja` で始まる別の言語名が来る。
+    """
+    lang = language.strip().lower()
+    if lang in ("ja", "jpn", "japanese", "日本語"):
+        return True
+    return lang.startswith("ja-") or lang.startswith("ja_")
 
 
 def bump_ask_count(pid, limit=ASK_LIMIT):
@@ -135,10 +189,12 @@ def bump_ask_count(pid, limit=ASK_LIMIT):
     return True
 
 
-def should_ask(pid):
-    """促してよいか。**判定できない要素が1つでもあれば促さない**。"""
-    if not is_japanese():
-        return False
+def should_ask(pid, language):
+    """促してよいか。**判定できない要素が1つでもあれば促さない**。
+
+    ただし表示言語だけは例外で、判定できなければ英語に倒して促す
+    （黙ると「英語圏のユーザーには何も起きない」に逆戻りする）。
+    """
     if os.path.exists(os.path.join(HOME, "cache", "session-renamed", pid)):
         return False
     job_dir = job_dir_for(pid)
@@ -151,12 +207,24 @@ def should_ask(pid):
         return False
     if state.get("nameSource") == "user":
         return False
-    name = state.get("name") or ""
-    if any(ord(c) > 127 for c in name):
-        # 既に表示言語の名前が付いている（nameSource を書かない経路で
-        # 付いた場合もここで拾う）。**促す理由が無い**
+    if looks_named(state.get("name") or ""):
         return False
     return bump_ask_count(pid)
+
+
+def looks_named(name):
+    """もう人が読める名前が付いているか。
+
+    `nameSource` を書かない経路で名前が変わっていても拾うための保険。
+    非 ASCII が混じっていれば表示言語の名前、ASCII だけでも
+    **kebab-case でなければ**（空白や大文字がある）人が付けた名前と見なす。
+    """
+    name = name.strip()
+    if not name:
+        return False
+    if any(ord(c) > 127 for c in name):
+        return True
+    return not KEBAB_RE.match(name)
 
 
 def main():
@@ -166,18 +234,30 @@ def main():
         payload = {}
 
     pid = resolve_pid(payload.get("session_id") or "")
-    if not pid or not should_ask(pid):
+    language = display_language()
+    if not pid or not should_ask(pid, language):
         return
 
     script = os.path.join(HOOKS_DIR, "rename-session.sh")
-    message = (
-        "[セッション名] このセッションの名前はまだ自動生成の英語のままです。"
-        '今の依頼の主題が掴めた時点で `"%s" "<名前>"` を一度だけ実行し、'
-        "日本語の簡潔な名前に付け直してください。"
-        "名前は体言止め・全角10〜20文字が目安で、リポジトリ名やブランチ名は入れず、"
-        "記号や引用符も使いません（例:「セッション名の自動リネームを仕込む」）。"
-        "実行したことをユーザーに報告する必要はありません。" % script
-    )
+    if is_japanese(language):
+        message = (
+            "[セッション名] このセッションの名前はまだ自動生成の英語のままです。"
+            '今の依頼の主題が掴めた時点で `"%s" "<名前>"` を一度だけ実行し、'
+            "日本語の簡潔な名前に付け直してください。"
+            "名前は体言止め・全角10〜20文字が目安で、リポジトリ名やブランチ名は入れず、"
+            "記号や引用符も使いません（例:「セッション名の自動リネームを仕込む」）。"
+            "実行したことをユーザーに報告する必要はありません。" % script
+        )
+    else:
+        message = (
+            "[Session name] This session still has its auto-generated kebab-case name. "
+            'Once you know what the request is about, run `"%s" "<name>"` exactly once '
+            "and rename it to a short phrase in %s. "
+            "Keep it under 40 characters, name what the work is, and leave out repository "
+            "and branch names, quotes, and emoji "
+            '(for example: "Fix the login redirect"). '
+            "You do not need to tell the user that you renamed the session." % (script, language)
+        )
     print(
         json.dumps(
             {
