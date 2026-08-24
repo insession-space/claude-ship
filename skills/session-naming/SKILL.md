@@ -1,16 +1,17 @@
 ---
 name: session-naming
-description: セッション名を表示言語（日本語）の簡潔な名前に付け直す。Claude Code の自動命名は英語の kebab-case 固定なので、一覧で見分けがつくよう主題が確定した時点で1回だけ付け直す。「セッション名を付けて」「名前を日本語にして」と言われたとき、および UserPromptSubmit の催促（[セッション名] で始まる追加コンテキスト）を受け取ったときに使う。
+description: セッション名を、ユーザーの表示言語の簡潔な名前に付け直す。Claude Code の自動命名は英語の kebab-case 固定なので、一覧で見分けがつくよう主題が確定した時点で1回だけ付け直す。「セッション名を付けて」「名前を日本語にして」「rename this session」と言われたとき、および UserPromptSubmit の催促（[セッション名] / [Session name] で始まる追加コンテキスト）を受け取ったときに使う。
 ---
 
 # session-naming — セッション名を表示言語で付け直す
 
 Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**（本体の命名プロンプトに
 `fix-login-bug` のような英語例が埋め込まれているため、`~/.claude/CLAUDE.md` の言語指定では
-変わらない）。日本語で作業しているのに一覧が `skill-session-naming-japanese` のような英語で
-並ぶと、セッションの見分けがつかない。
+変わらない）。一覧が `skill-session-naming-japanese` のような機械的な名前で並ぶと、
+セッションの見分けがつかない。**これは日本語で作業しているときに限った話ではない** —
+英語で作業していても、`fix-login-bug` より `Fix the login redirect` のほうが見分けがつく。
 
-**主題が掴めた時点で、表示言語の名前に自分で付け直す。**
+**主題が掴めた時点で、ユーザーの表示言語の名前に自分で付け直す。**
 
 ## やり方
 
@@ -26,14 +27,22 @@ Claude Code が自動で付けるセッション名は **英語の kebab-case �
 
 ## 名前の書き方
 
-- 体言止め。**全角10〜20文字**が目安（40幅を超える分はスクリプト側で切り詰められる）。
 - 「何をしているか」が一行で分かること。リポジトリ名やブランチ名は一覧の別列に出るので入れない。
 - 記号・引用符・絵文字は使わない。
+- 長さの目安は文字の幅で決まる。**全角2幅・半角1幅で数えて40幅**を超える分は、スクリプト側で
+  切り詰められる。
+
+| 表示言語 | 書き方 | 長さの目安 |
+|---|---|---|
+| 日本語 | 体言止め | 全角10〜20文字 |
+| ラテン文字の言語 | 短い名詞句。文にしない | 20〜40文字 |
 
 | 良い | 悪い |
 |---|---|
 | ホーム画面のセッション選択を直す | fix-home-session-nav |
 | リリース手順の署名検証を通す | 作業 |
+| Fix the login redirect | fix-login-bug |
+| Sign the release build | Work on some things |
 | セッション名の自動リネームを仕込む | session-desk のセッション名まわりの調査と実装（長すぎ） |
 
 ## スクリプトが触るもの
@@ -55,4 +64,7 @@ pid は `CLAUDE_CODE_MESSAGING_SOCKET`（`/tmp/cc-socks/<pid>.sock`）から取�
 
 - バックグラウンドジョブ以外のセッション（対応する `jobs/<jobId>` が無い）
 - `state.json` がまだ書かれていない / 壊れている
-- 表示言語が日本語でない（`~/.claude/settings.json` の `language`、無ければ `AppleLocale` で判定）
+- 既にユーザー由来の名前が付いている（`nameSource: "user"`、または付け直し済みの印がある）
+
+表示言語は `~/.claude/settings.local.json` → `~/.claude/settings.json` の `language`、
+無ければ `AppleLocale` の順に見る。**どれからも判定できないときは英語として促す**（黙らない）。

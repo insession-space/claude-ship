@@ -111,13 +111,88 @@ check "促しに rename-session.sh のパスが載る" \
 rm -rf "$SANDBOX"
 
 setup "English"
-check "表示言語が英語なら何も出さない" "$(run_remind)" ""
+OUT="$(run_remind)"
+check "表示言語が英語でも促す" "$(printf '%s' "$OUT" | grep -c 'Session name')" "1"
+check "英語の促しに言語名が入る" "$(printf '%s' "$OUT" | grep -c 'phrase in English')" "1"
+check "英語の促しに長さの上限が入る" "$(printf '%s' "$OUT" | grep -c 'under 40 characters')" "1"
+check "英語の促しにスクリプトのパスが載る" \
+  "$(printf '%s' "$OUT" | grep -c 'rename-session.sh')" "1"
+check "英語のときは日本語の文面を出さない" \
+  "$(printf '%s' "$OUT" | grep -c 'セッション名')" "0"
+rm -rf "$SANDBOX"
+
+setup "Français"
+check "未知の言語名がそのまま埋まる" \
+  "$(run_remind | grep -c 'phrase in Français')" "1"
+rm -rf "$SANDBOX"
+
+setup "en"
+check "language が言語コードでも呼び名になる" \
+  "$(run_remind | grep -c 'phrase in English')" "1"
+rm -rf "$SANDBOX"
+
+setup "fr-CA"
+check "地域付きのコードも言語だけの呼び名になる" \
+  "$(run_remind | grep -c 'phrase in French')" "1"
+rm -rf "$SANDBOX"
+
+setup "ja"
+check "language が ja なら日本語の文面になる" \
+  "$(run_remind | grep -c 'セッション名')" "1"
+rm -rf "$SANDBOX"
+
+setup "xx"
+check "表に無いコードはそのまま埋まる" \
+  "$(run_remind | grep -c 'phrase in xx')" "1"
+rm -rf "$SANDBOX"
+
+setup "Javanese"
+check "ja で始まる別言語を日本語と間違えない" \
+  "$(run_remind | grep -c 'phrase in Javanese')" "1"
+rm -rf "$SANDBOX"
+
+setup "非日本語"
+check "日本語を含む別の語を日本語と間違えない" \
+  "$(run_remind | grep -c 'phrase in 非日本語')" "1"
+rm -rf "$SANDBOX"
+
+setup "English"
+set_name() {
+  python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d["name"]=sys.argv[2];json.dump(d,open(p,"w"),ensure_ascii=False)' \
+    "$SANDBOX/.claude/jobs/job-1/state.json" "$1"
+}
+set_name "Fix the login redirect"
+check "英語でも人が付けた名前なら促さない" "$(run_remind)" ""
+rm -rf "$SANDBOX"
+
+setup "English"
+check "kebab-case のままなら促す" "$(run_remind | grep -c 'Session name')" "1"
 rm -rf "$SANDBOX"
 
 setup ""
-check "language 未設定なら何も出さない(AppleLocale が ja でない限り)" \
-  "$(env -u CLAUDE_JOB_DIR HOME="$SANDBOX" PATH=/nonexistent \
-     CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" python3 "$REMIND" <<< '{"session_id":"s-1"}' 2>/dev/null)" ""
+# **`defaults` を引けない状態を作る。** PATH ごと空にすると python3 も起動できず、
+# 「出力が無い」を成功と読み違える（実際に前はそれで通っていた）
+EMPTY_BIN="$(mktemp -d)"
+check "language 未設定・AppleLocale も取れないなら英語で促す" \
+  "$(env -u CLAUDE_JOB_DIR HOME="$SANDBOX" PATH="$EMPTY_BIN" \
+     CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$(command -v python3)" "$REMIND" \
+     <<< '{"session_id":"s-1"}' 2>/dev/null | grep -c 'phrase in English')" "1"
+rm -rf "$EMPTY_BIN" "$SANDBOX"
+
+setup "English" "user"
+check "英語環境でも user 由来の名前なら促さない" "$(run_remind)" ""
+rm -rf "$SANDBOX"
+
+setup "English"
+mkdir -p "$SANDBOX/.claude/cache/session-renamed"
+: > "$SANDBOX/.claude/cache/session-renamed/$PID"
+check "英語環境でも印があれば促さない" "$(run_remind)" ""
+rm -rf "$SANDBOX"
+
+setup "English"
+printf 'broken settings' > "$SANDBOX/.claude/settings.json"
+run_remind > /dev/null 2>&1
+check "settings.json が壊れていても終了コード0" "$?" "0"
 rm -rf "$SANDBOX"
 
 setup "日本語" "user"

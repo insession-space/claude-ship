@@ -51,22 +51,23 @@ Phase 3  止まった地点に応じて、次の選択肢を出す
 
 3つ揃うまでループします。上限（既定5周）に達したら、残っているギャップを列挙して止まります。
 
-## セッション名を日本語に付け直す
+## セッション名を表示言語に付け直す
 
-Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**です（`fix-login-bug` のような英語例が本体の命名プロンプトに埋め込まれているため、`CLAUDE.md` で言語を指定しても変わりません）。日本語で作業していると、セッションの一覧が英語で並んで見分けがつきません。
+Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**です（`fix-login-bug` のような英語例が本体の命名プロンプトに埋め込まれているため、`CLAUDE.md` で言語を指定しても変わりません）。一覧が機械的な名前で並ぶと見分けがつきません。日本語で作業していれば英語が並ぶ問題として、英語で作業していても `fix-login-bug` より `Fix the login redirect` が読める問題として、どちらにも効きます。
 
 このプラグインを入れると、**`/ship-session` を使わない普通のセッションでも**次が起きます。
 
 1. 最初のプロンプトを送ると `UserPromptSubmit` hook が走り、セッション名がまだ自動生成のままなら「表示言語で付け直せ」とエージェントに伝える
 2. エージェントが依頼の主題を掴んだ時点で `hooks/rename-session.sh` を1回だけ実行する
-3. `~/.claude/jobs/<jobId>/state.json` の `name` が日本語になり、Session Desk などの一覧に反映される
+3. `~/.claude/jobs/<jobId>/state.json` の `name` が表示言語の名前になり、Session Desk などの一覧に反映される
 
 **何もしない条件**（いずれも異常ではありません）。
 
-- 表示言語が日本語でない（`~/.claude/settings.json` の `language`、無ければ `AppleLocale` で判定）
-- すでにユーザー由来の名前が付いている（`nameSource: "user"`）
+- すでにユーザー由来の名前が付いている（`nameSource: "user"`、または付け直し済みの印がある）
 - バックグラウンドジョブ以外のセッション（書き込み先の `state.json` が無い）
 - 促した回数が上限（3回）に達している
+
+表示言語は `~/.claude/settings.local.json` → `~/.claude/settings.json` の `language`、無ければ `AppleLocale` の順に見ます。**どれからも判定できないときは英語として促します**（黙りません）。
 
 書き換えるのは `state.json` の `name` / `nameSource` だけです。`~/.claude/sessions/<pid>.json` は `jobId` を引くために**読むだけ**で、書き換えません。hook が例外で落ちても、プロンプトの送信は止めません。
 
@@ -84,7 +85,7 @@ Claude Code が自動で付けるセッション名は **英語の kebab-case �
 | `create-issue` | 要件と仕様を深掘りして Issue を作る（作成のみ） | ✔ |
 | `issue-loop` | 1つのチケットを停止条件まで反復実装する | ✔ |
 | `code-review` | 差分をレビューする | ✔ |
-| `session-naming` | セッション名を表示言語（日本語）で付け直す | ✔ |
+| `session-naming` | セッション名をユーザーの表示言語で付け直す | ✔ |
 
 `ship-session` は下3つに委譲します。単体でも使えるので、「Issue だけ作りたい」「差分だけ見てほしい」ときは直接呼べます。
 
