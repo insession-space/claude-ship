@@ -76,6 +76,59 @@ for s in $DELEGATES; do
 done
 
 echo
+echo "ship-session SKILL.md: 次の Phase を予告したまま終わらない"
+has "予告したまま終わらない節がある" "$SHIP" "^### 次の Phase を予告したまま終わらない"
+has "同じターン内で Skill 呼び出しまで到達させる旨がある" "$SHIP" "同じターン内で .Skill. ツールの呼び出し"
+has "needs input: / failed: が例外として書かれている" "$SHIP" "needs input:. / .failed:. で戻った"
+has "到達点の判定が先である旨がある" "$SHIP" "到達点の判定が先"
+
+echo
+echo "委譲先スキル: 完了シグナルは呼び出し元の判定を先に書く"
+for s in $DELEGATES; do
+  f="$ROOT/skills/$s/SKILL.md"
+  # 「ship-session から呼ばれているときは result: を書かない」が
+  # 「単体で起動されたときは」より前の行に来ていること（順序だけを見る）。
+  a="$(grep -nE 'ship-session. から呼ばれているときは .result:. を書かない' "$f" | head -n 1 | cut -d: -f1)"
+  b="$(grep -nE '単体で起動されたときは' "$f" | head -n 1 | cut -d: -f1)"
+  if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
+    ok "$s: 呼び出し元の分岐が result: の指示より先にある"
+  else
+    ng "$s: 呼び出し元の分岐が result: の指示より先にある (順序: $a, $b)"
+  fi
+done
+
+echo
+echo "委譲先スキル: 呼び出し元経由でも needs input: / failed: は返す"
+for s in $DELEGATES; do
+  f="$ROOT/skills/$s/SKILL.md"
+  has "$s: 止まる合図は呼び出し元経由でも変わらない旨がある" "$f" "止まるときの合図は呼び出し元"
+done
+
+echo
+echo "Artifact の画像: 共通ファイルに仕様がある"
+SHARED="$ROOT/skills/_shared/artifact-images.md"
+has "開く操作（クリック / キーボード）" "$SHARED" "Enter / Space"
+has "閉じる3経路をすべて用意する旨" "$SHARED" "3経路"
+has "Esc で閉じる" "$SHARED" "Esc"
+has "背景クリックで閉じる" "$SHARED" "背景のクリック"
+has "閉じるボタンで閉じる" "$SHARED" "閉じるボタン"
+has "サムネイルのアクセシビリティ" "$SHARED" 'tabindex="0"'
+has "self-contained の制約（CSP）" "$SHARED" "CSP"
+has "テーマ対応" "$SHARED" "prefers-color-scheme"
+has "画像0枚でも落ちない書き方" "$SHARED" "querySelectorAll"
+has "data URI の 16MB 上限" "$SHARED" "16MB"
+has "等倍までしか拡大しない" "$SHARED" "等倍"
+
+echo
+echo "Artifact の画像: 各スキルからの参照"
+has "ship-session が共通ファイルを参照している" "$SHIP" 'skills/_shared/artifact-images\.md'
+for s in $DELEGATES; do
+  has "$s: 共通ファイルを参照している" "$ROOT/skills/$s/SKILL.md" '\.\./_shared/artifact-images\.md'
+done
+has "ship-session: before / after 横並びの規定が残っている" "$SHIP" "before / after のスクリーンショットを横並び"
+has "issue-loop: before / after 横並びの規定が残っている" "$ROOT/skills/issue-loop/SKILL.md" "before / after のスクリーンショットを横並び"
+
+echo
 echo "全 SKILL.md: frontmatter に name と description がある"
 for f in "$SHIP" "$ROOT"/skills/*/SKILL.md; do
   rel="${f#"$ROOT"/}"
