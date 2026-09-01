@@ -10,6 +10,11 @@
       "name": "ship-session",
       "source": "./plugins/ship-session",
       "description": "要望を GitHub Issue にして、受け入れ条件が全て埋まり・検証が緑・レビュー指摘0件になるまで同じセッションで実装しきるワークフロー。到達点（Issue化 / 実装 / PR / マージ）を着手前に1回だけ決めて、そこで止まる。"
+    },
+    {
+      "name": "graph-workflow",
+      "source": "./plugins/graph-workflow",
+      "description": "タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行する。グラフ設計を先に見せて承認を取り、失敗時は resume で途中再開する。"
     }
   ]
 }

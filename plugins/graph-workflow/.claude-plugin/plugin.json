@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "graph-workflow",
+  "version": "0.1.0",
+  "description": "タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行するグラフエンジニアリングのスキル。グラフ設計を先に見せて承認を取り、実行し、失敗時は resume で途中から再開する。",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "graph",
+    "orchestration",
+    "subagents",
+    "parallel"
+  ],
+  "skills": [
+    "./"
+  ]
+}
