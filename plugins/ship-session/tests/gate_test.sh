@@ -77,7 +77,7 @@ grep -q "ship-goal.sh" "$SANDBOX/err" && ok "ブロック文が記録スクリ�
 run_pre "Read" '{"file_path":"/tmp/x"}'; check "Read もブロック（調査もゲートの後）" "$?" "2"
 run_pre "Agent" '{"prompt":"x"}'; check "Agent もブロック" "$?" "2"
 run_pre "AskUserQuestion" '{"questions":[]}'; check "AskUserQuestion は通る" "$?" "0"
-run_pre "Bash" '{"command":"\"/x/hooks/rename-session.sh\" \"名前\""}'
+run_pre "Bash" "{\"command\":\"\\\"$ROOT/hooks/rename-session.sh\\\" \\\"名前\\\"\"}"
 check "rename-session.sh は通る" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"PR作成まで\\\"\"}"
 check "ship-goal.sh は通る" "$?" "0"
@@ -131,6 +131,12 @@ run_pre "Bash" '{"command":"cat ship-goal.sh"}'
 check "許可スクリプト名を引数に持つ別コマンドは拒否" "$?" "2"
 run_pre "Bash" '{"command":"/x/evil-ship-goal.sh status"}'
 check "basename が一致しないスクリプトは拒否" "$?" "2"
+run_pre "Bash" '{"command":"./ship-goal.sh status"}'
+check "同名でもプラグインの hooks/ 外にあるスクリプトは拒否（相対パス）" "$?" "2"
+run_pre "Bash" '{"command":"/x/hooks/ship-goal.sh status"}'
+check "同名でもプラグインの hooks/ 外にあるスクリプトは拒否（絶対パス）" "$?" "2"
+run_pre "Bash" '{"command":"rename-session.sh \"名前\""}'
+check "PATH 解決に頼る素の名前は拒否" "$?" "2"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\"}"
 check "閉じていない引用符は拒否" "$?" "2"
 

@@ -78,9 +78,10 @@ def bash_allowed_while_pending(command):
     # argv[0] だけは SKILL.md が案内する `"${CLAUDE_PLUGIN_ROOT}/hooks/…"` 形式を
     # 許す。この変数はプラグインのルートを指すだけで、値を攻撃者が選べない
     argv0 = words[0]
+    plugin_root = os.path.dirname(HOOKS_DIR)
     for prefix in ("${CLAUDE_PLUGIN_ROOT}/", "$CLAUDE_PLUGIN_ROOT/"):
         if argv0.startswith(prefix):
-            argv0 = "/" + argv0[len(prefix):]
+            argv0 = os.path.join(plugin_root, argv0[len(prefix):])
             words[0] = argv0
             break
     for word in words:
@@ -93,9 +94,17 @@ def bash_allowed_while_pending(command):
     if "=" in argv0:
         # `FOO=bar script` の env 代入プレフィックス
         return False
-    allowed_args = ALLOWED_BASH_SCRIPTS.get(os.path.basename(argv0))
-    if allowed_args is None and os.path.basename(argv0) not in ALLOWED_BASH_SCRIPTS:
+    name = os.path.basename(argv0)
+    if name not in ALLOWED_BASH_SCRIPTS:
         return False
+    # 同名の別スクリプト（`./ship-goal.sh` やチェックアウト内の偽物）を通さない。
+    # このプラグインの hooks/ にある実体そのものだけを許す
+    try:
+        if os.path.realpath(argv0) != os.path.realpath(os.path.join(HOOKS_DIR, name)):
+            return False
+    except (OSError, ValueError):
+        return False
+    allowed_args = ALLOWED_BASH_SCRIPTS[name]
     if allowed_args is not None:
         if len(words) < 2 or words[1] not in allowed_args:
             return False
