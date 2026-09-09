@@ -37,8 +37,57 @@ GOAL_HEADERS = ("到達点", "進め方")
 #: セッション名のリネームだけを通す
 ALLOWED_WHILE_PENDING = ("AskUserQuestion",)
 
-#: pending 中の Bash で許可するコマンド（部分一致）
-ALLOWED_BASH_MARKERS = ("ship-goal.sh", "rename-session.sh")
+#: pending 中の Bash で許可するスクリプト（argv[0] の basename）と、その第1引数。
+#: 部分一致ではなく argv を解析して判定する（`echo x # ship-goal.sh` のような
+#: 抜け道を塞ぐ）。None は第1引数を制限しない
+ALLOWED_BASH_SCRIPTS = {
+    "ship-goal.sh": ("record", "status", "clear"),
+    "rename-session.sh": None,
+}
+
+#: 単語の中に現れたら拒否する文字。シェルが展開・実行に使うもの
+#: （コマンド置換・変数展開・エスケープ・改行）
+UNSAFE_WORD_CHARS = ("$", "`", "\\", "\n", "\r")
+
+
+def bash_allowed_while_pending(command):
+    """pending 中の Bash コマンドが、許可スクリプトの単純な1回呼び出しか。
+
+    通すのは「`<path>/ship-goal.sh record "<到達点>"` のように、許可スクリプトを
+    argv[0] とする単一コマンド」だけ。パイプ・連結・リダイレクト・サブシェル・
+    コマンド置換・変数展開・改行・env 代入プレフィックスを含むものは拒否する。
+    解析できないもの（閉じていない引用符など）も拒否する。
+    """
+    import shlex
+
+    if any(ch in command for ch in ("\n", "\r")):
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:
+        return False
+    if not words:
+        return False
+    for word in words:
+        # punctuation_chars=True では `;` `|` `&` `<` `>` `(` `)` だけの
+        # トークンが演算子として切り出される
+        if word and all(ch in lexer.punctuation_chars for ch in word):
+            return False
+        if any(ch in word for ch in UNSAFE_WORD_CHARS):
+            return False
+    argv0 = words[0]
+    if "=" in argv0:
+        # `FOO=bar script` の env 代入プレフィックス
+        return False
+    allowed_args = ALLOWED_BASH_SCRIPTS.get(os.path.basename(argv0))
+    if allowed_args is None and os.path.basename(argv0) not in ALLOWED_BASH_SCRIPTS:
+        return False
+    if allowed_args is not None:
+        if len(words) < 2 or words[1] not in allowed_args:
+            return False
+    return True
 
 
 def resolve_pid(session_id):
@@ -113,7 +162,7 @@ def allowed_while_pending(tool_name, tool_input):
         return True
     if tool_name == "Bash":
         command = str((tool_input or {}).get("command") or "")
-        return any(marker in command for marker in ALLOWED_BASH_MARKERS)
+        return bash_allowed_while_pending(command)
     return False
 
 
