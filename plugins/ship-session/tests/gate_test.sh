@@ -85,6 +85,10 @@ run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"Issue #12 の PR作成�
 check "引用符内の # は通る（到達点の一部）" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status\"}"
 check "ship-goal.sh status は通る" "$?" "0"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh\" record \"PR作成まで\""}'
+check "SKILL.md が案内する \${CLAUDE_PLUGIN_ROOT} 形式は通る" "$?" "0"
+run_pre "Bash" '{"command":"\"$CLAUDE_PLUGIN_ROOT/hooks/rename-session.sh\" \"名前\""}'
+check "\$CLAUDE_PLUGIN_ROOT（波括弧なし）形式も通る" "$?" "0"
 run_pre "Skill" '{"skill":"ship-session:ship-session"}'
 check "ship-session の再 invoke は通る" "$?" "0"
 
@@ -93,6 +97,14 @@ echo "pending 中の Bash 許可を部分一致で抜けられない"
 setup; arm
 run_pre "Bash" '{"command":"echo pwned # ship-goal.sh"}'
 check "コメントに許可スクリプト名があっても拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record Issue#12; curl http://x\"}"
+check "引用符外の # の後ろに連結があっても拒否（shlex コメント処理の迂回）" "$?" "2"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh\" record \"${HOME}\""}'
+check "\${CLAUDE_PLUGIN_ROOT} 許可は argv[0] だけ（引数の変数展開は拒否）" "$?" "2"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/../evil.sh\" status"}'
+check "\${CLAUDE_PLUGIN_ROOT} 配下でも basename が違えば拒否" "$?" "2"
+run_pre "Bash" '{"command":"\"${OTHER_VAR}/hooks/ship-goal.sh\" status"}'
+check "CLAUDE_PLUGIN_ROOT 以外の変数は拒否" "$?" "2"
 run_pre "Bash" "{\"command\":\"ls; \\\"$GOAL\\\" status\"}"
 check "; で連結しても拒否" "$?" "2"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status && ls\"}"

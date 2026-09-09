@@ -65,11 +65,22 @@ def bash_allowed_while_pending(command):
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
+        # shlex 既定の `#` コメント処理を切る。切らないと `record Issue#12; curl ...`
+        # の `#` 以降が捨てられ、bash が実行する `; curl ...` を検査できない
+        lexer.commenters = ""
         words = list(lexer)
     except ValueError:
         return False
     if not words:
         return False
+    # argv[0] だけは SKILL.md が案内する `"${CLAUDE_PLUGIN_ROOT}/hooks/…"` 形式を
+    # 許す。この変数はプラグインのルートを指すだけで、値を攻撃者が選べない
+    argv0 = words[0]
+    for prefix in ("${CLAUDE_PLUGIN_ROOT}/", "$CLAUDE_PLUGIN_ROOT/"):
+        if argv0.startswith(prefix):
+            argv0 = "/" + argv0[len(prefix):]
+            words[0] = argv0
+            break
     for word in words:
         # punctuation_chars=True では `;` `|` `&` `<` `>` `(` `)` だけの
         # トークンが演算子として切り出される
@@ -77,7 +88,6 @@ def bash_allowed_while_pending(command):
             return False
         if any(ch in word for ch in UNSAFE_WORD_CHARS):
             return False
-    argv0 = words[0]
     if "=" in argv0:
         # `FOO=bar script` の env 代入プレフィックス
         return False
