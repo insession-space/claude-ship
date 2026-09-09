@@ -39,9 +39,11 @@ ALLOWED_WHILE_PENDING = ("AskUserQuestion",)
 
 #: pending 中の Bash で許可するスクリプト（argv[0] の basename）と、その第1引数。
 #: 部分一致ではなく argv を解析して判定する（`echo x # ship-goal.sh` のような
-#: 抜け道を塞ぐ）。None は第1引数を制限しない
+#: 抜け道を塞ぐ）。None は第1引数を制限しない。
+#: `clear` は状態ファイルを消してゲートをフェイルオープンさせるので pending 中は
+#: 通さない（出荷型でない依頼は AskUserQuestion「進め方」で解除する）
 ALLOWED_BASH_SCRIPTS = {
-    "ship-goal.sh": ("record", "status", "clear"),
+    "ship-goal.sh": ("record", "status"),
     "rename-session.sh": None,
 }
 

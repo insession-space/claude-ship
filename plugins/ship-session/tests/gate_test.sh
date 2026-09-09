@@ -125,6 +125,8 @@ run_pre "Bash" "{\"command\":\"FOO=1 \\\"$GOAL\\\" status\"}"
 check "env 代入プレフィックスは拒否" "$?" "2"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" exec ls\"}"
 check "未知のサブコマンドは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" clear\"}"
+check "pending 中の clear は拒否（状態を消してフェイルオープンさせない）" "$?" "2"
 run_pre "Bash" '{"command":"cat ship-goal.sh"}'
 check "許可スクリプト名を引数に持つ別コマンドは拒否" "$?" "2"
 run_pre "Bash" '{"command":"/x/evil-ship-goal.sh status"}'
