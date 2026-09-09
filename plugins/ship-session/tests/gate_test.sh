@@ -77,12 +77,68 @@ grep -q "ship-goal.sh" "$SANDBOX/err" && ok "ブロック文が記録スクリ�
 run_pre "Read" '{"file_path":"/tmp/x"}'; check "Read もブロック（調査もゲートの後）" "$?" "2"
 run_pre "Agent" '{"prompt":"x"}'; check "Agent もブロック" "$?" "2"
 run_pre "AskUserQuestion" '{"questions":[]}'; check "AskUserQuestion は通る" "$?" "0"
-run_pre "Bash" '{"command":"\"/x/hooks/rename-session.sh\" \"名前\""}'
+run_pre "Bash" "{\"command\":\"\\\"$ROOT/hooks/rename-session.sh\\\" \\\"名前\\\"\"}"
 check "rename-session.sh は通る" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"PR作成まで\\\"\"}"
 check "ship-goal.sh は通る" "$?" "0"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"Issue #12 の PR作成まで\\\"\"}"
+check "引用符内の # は通る（到達点の一部）" "$?" "0"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status\"}"
+check "ship-goal.sh status は通る" "$?" "0"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh\" record \"PR作成まで\""}'
+check "SKILL.md が案内する \${CLAUDE_PLUGIN_ROOT} 形式は通る" "$?" "0"
+run_pre "Bash" '{"command":"\"$CLAUDE_PLUGIN_ROOT/hooks/rename-session.sh\" \"名前\""}'
+check "\$CLAUDE_PLUGIN_ROOT（波括弧なし）形式も通る" "$?" "0"
 run_pre "Skill" '{"skill":"ship-session:ship-session"}'
 check "ship-session の再 invoke は通る" "$?" "0"
+
+echo
+echo "pending 中の Bash 許可を部分一致で抜けられない"
+setup; arm
+run_pre "Bash" '{"command":"echo pwned # ship-goal.sh"}'
+check "コメントに許可スクリプト名があっても拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record Issue#12; curl http://x\"}"
+check "引用符外の # の後ろに連結があっても拒否（shlex コメント処理の迂回）" "$?" "2"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh\" record \"${HOME}\""}'
+check "\${CLAUDE_PLUGIN_ROOT} 許可は argv[0] だけ（引数の変数展開は拒否）" "$?" "2"
+run_pre "Bash" '{"command":"\"${CLAUDE_PLUGIN_ROOT}/../evil.sh\" status"}'
+check "\${CLAUDE_PLUGIN_ROOT} 配下でも basename が違えば拒否" "$?" "2"
+run_pre "Bash" '{"command":"\"${OTHER_VAR}/hooks/ship-goal.sh\" status"}'
+check "CLAUDE_PLUGIN_ROOT 以外の変数は拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"ls; \\\"$GOAL\\\" status\"}"
+check "; で連結しても拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status && ls\"}"
+check "&& で連結しても拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status | sh\"}"
+check "パイプは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status > /tmp/x\"}"
+check "リダイレクトは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"\$(ls)\\\"\"}"
+check "引数内のコマンド置換は拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"\$HOME\\\"\"}"
+check "引数内の変数展開は拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" status\\nls\"}"
+check "改行での複数コマンドは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\$(ls) \\\"$GOAL\\\" status\"}"
+check "先頭のコマンド置換は拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"FOO=1 \\\"$GOAL\\\" status\"}"
+check "env 代入プレフィックスは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" exec ls\"}"
+check "未知のサブコマンドは拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" clear\"}"
+check "pending 中の clear は拒否（状態を消してフェイルオープンさせない）" "$?" "2"
+run_pre "Bash" '{"command":"cat ship-goal.sh"}'
+check "許可スクリプト名を引数に持つ別コマンドは拒否" "$?" "2"
+run_pre "Bash" '{"command":"/x/evil-ship-goal.sh status"}'
+check "basename が一致しないスクリプトは拒否" "$?" "2"
+run_pre "Bash" '{"command":"./ship-goal.sh status"}'
+check "同名でもプラグインの hooks/ 外にあるスクリプトは拒否（相対パス）" "$?" "2"
+run_pre "Bash" '{"command":"/x/hooks/ship-goal.sh status"}'
+check "同名でもプラグインの hooks/ 外にあるスクリプトは拒否（絶対パス）" "$?" "2"
+run_pre "Bash" '{"command":"rename-session.sh \"名前\""}'
+check "PATH 解決に頼る素の名前は拒否" "$?" "2"
+run_pre "Bash" "{\"command\":\"\\\"$GOAL\"}"
+check "閉じていない引用符は拒否" "$?" "2"
 
 echo
 echo "record でゲートが開く"
