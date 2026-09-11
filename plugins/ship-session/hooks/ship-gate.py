@@ -13,7 +13,8 @@ ship-session の最大の故障モードは「Phase 0 を飛ばして作業に�
   何をすべきかを stderr でエージェントに返す
 - 到達点は次のどちらかで記録され、ゲートが開く（active）
   - エージェントが `ship-goal.sh record "<到達点>"` を実行する
-  - `AskUserQuestion`（header: 到達点 / 進め方）の回答を PostToolUse が自動記録する
+  - `AskUserQuestion`（header: Goal / Approach / 到達点 / 進め方）の回答を
+    PostToolUse が自動記録する
 
 ゲートに関係しないセッション・判定できない状況では **必ず素通しする**
 （フェイルオープン。ユーザーの作業を絶対に止めない）。
@@ -30,8 +31,11 @@ STATE_DIR = os.path.join(HOME, "cache", "ship-gate")
 #: ゲートを張る対象のスキル名（`plugin:skill` の skill 側）
 SHIP_SKILL = "ship-session"
 
-#: 到達点を聞く質問の header（SKILL.md の規定と揃える）
-GOAL_HEADERS = ("到達点", "進め方")
+#: 到達点を聞く質問の header（SKILL.md / skills/_shared/user-language.md と揃える）。
+#: 質問はユーザーの言語で出すので、英語と日本語の両方を持つ。
+#: **どの header でも記録する形にはしない**（到達点と無関係な質問の回答でゲートが開く）。
+#: ほかの言語で聞いた場合は、エージェントが ship-goal.sh record で記録する
+GOAL_HEADERS = ("Goal", "Approach", "到達点", "進め方")
 
 #: pending 中でも許可するツール。到達点の確定と、その前でも許される
 #: セッション名のリネームだけを通す
@@ -188,18 +192,25 @@ def allowed_while_pending(tool_name, tool_input):
 
 
 def block_message():
+    """ブロック時にエージェントへ返す文。
+
+    読むのはエージェントなので英語で書く（ユーザーに見せる前提ではない）。
+    ユーザーへの質問は、ここに書いた header をユーザーの言語に訳して出す。
+    """
     goal_script = os.path.join(HOOKS_DIR, "ship-goal.sh")
     return (
-        "[ship-gate] 到達点が未確定です。ship-session は Phase 0 で到達点"
-        "（Issue化まで / 実装まで / PR作成まで / マージまで）を確定させるまで、"
-        "他のツールを使えません（ファイル読み取り・調査・委譲もゲートの後です）。\n"
-        "- ユーザーの発話に到達点が明示されているなら、"
-        '`"%s" record "<到達点>"` を実行してから作業を始めてください。\n'
-        "- 明示されていなければ `AskUserQuestion`（header: 到達点）で確認して"
-        "ください。回答は自動で記録されます。\n"
-        "- 出荷型でない依頼（純粋な質問・調査だけ・既存 PR の修正など）なら "
-        "header: 進め方 で聞いてください。こちらも自動で記録されます。"
-        % goal_script
+        "[ship-gate] The goal is not decided yet. ship-session cannot use other tools "
+        "until Phase 0 fixes the goal (Up to PR / Up to merge / Implementation only / "
+        "Issue only). Reading files, investigating, and delegating all come after the gate.\n"
+        "- If the user's message already states the goal, run "
+        '`"%s" record "<goal>"` before starting work.\n'
+        "- Otherwise ask with `AskUserQuestion` (header: Goal), written in the user's "
+        "language. Answers under the headers %s are recorded automatically.\n"
+        "- If you already asked under a header in another language, run "
+        '`"%s" record "<answer>"` with the user\'s answer now.\n'
+        "- If the request is not shippable (a plain question, investigation only, fixing "
+        "an existing PR), ask with header: Approach instead."
+        % (goal_script, " / ".join(GOAL_HEADERS), goal_script)
     )
 
 
@@ -270,7 +281,10 @@ def extract_goal(tool_input, tool_response):
         value = answers.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
-    if len(answers) == 1:
+    # キーで引けない回答形式への保険。**質問が1問だけのときに限る。**
+    # 複数の質問をまとめて聞いたときに1件だけ返った回答は、到達点の質問への
+    # 回答とは限らない（無関係な質問の回答でゲートが開いてしまう）
+    if len(answers) == 1 and len(questions) == 1:
         value = next(iter(answers.values()))
         if isinstance(value, str) and value.strip():
             return value.strip()

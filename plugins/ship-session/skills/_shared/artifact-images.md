@@ -1,60 +1,62 @@
-# Artifact に画像を貼るときの決まり
+# Rules for images in Artifacts
 
-`ship-session` / `issue-loop` / `code-review` / `create-issue` の完了報告で Artifact に
-スクリーンショットを載せるときは、**クリックで拡大できる状態にしてから公開する**。
+When putting screenshots into an Artifact for a completion report from `ship-session` / `issue-loop` / `code-review` / `create-issue`,
+**make them click-to-enlarge before publishing**.
 
-- **理由**: before / after を横並びで貼ると1枚あたりの表示幅が狭くなり、UI 差分の細部が読めない。
-  拡大できないと結局ローカルのファイルを開き直すことになり、Artifact が成果物として完結しない。
+- **Why**: placing before / after side by side narrows each image, so the details of a UI diff cannot be read.
+  If they cannot be enlarged, you end up reopening the local files anyway, and the Artifact is not complete as a deliverable.
 
-このファイルが唯一の規定。各スキルの完了報告節からはここを参照するだけで、仕様を各所に複製しない。
+This file is the single source of truth. Each skill's completion-report section only refers here; do not duplicate the spec elsewhere.
 
 ---
 
-## 仕様
+## Spec
 
-| 項目 | 決まり |
+| Item | Rule |
 |---|---|
-| **開く** | サムネイルのクリック、およびサムネイルにフォーカスした状態での Enter / Space |
-| **表示** | 画面全体を覆うオーバーレイ。画像は `object-fit: contain` でビューポート内（およそ 95vw / 95vh）に収まる最大サイズ |
-| **拡大率** | **等倍まで**。元画像より大きくしない（data URI で埋めた画像を引き伸ばしても情報は増えない） |
-| **閉じる** | Esc キー / オーバーレイ背景のクリック / 明示的な閉じるボタン、の**3経路すべて**を用意する |
-| **アクセシビリティ** | サムネイルに `role="button"` と `tabindex="0"`。`alt` に before / after の別を書く。開いている間は背景をスクロールさせない。閉じたらフォーカスを元のサムネイルへ戻す |
-| **テーマ対応** | オーバーレイの地の色をトークンで定義し、ライト / ダーク双方で画像の縁が背景に溶けないようにする |
-| **画像0枚** | ライトボックスの初期化コードは対象画像が無くてもエラーを投げない（`querySelectorAll` が空を返しても成立する書き方にする） |
+| **Open** | Clicking a thumbnail, and Enter / Space while a thumbnail has focus |
+| **Display** | A full-screen overlay. The image is the largest size that fits in the viewport (about 95vw / 95vh) with `object-fit: contain` |
+| **Zoom** | **Up to natural size only**. Never enlarge beyond the original image (stretching an image embedded as a data URI adds no information) |
+| **Close** | Provide **all three ways to close**: the Esc key / clicking the backdrop of the overlay / an explicit close button |
+| **Accessibility** | `role="button"` and `tabindex="0"` on thumbnails. State before / after in `alt`. Do not let the background scroll while open. On close, return focus to the original thumbnail |
+| **Theming** | Define the overlay's background color as tokens so that image edges do not blend into the background in either light or dark |
+| **Zero images** | The lightbox init code does not throw when there are no target images (write it so it works even when `querySelectorAll` returns nothing) |
 
-### 守ること
+### Must do
 
-- **self-contained で書く。** Artifact は CSP で外部ホストへの通信を禁じられている。CDN のライブラリ・
-  外部 CSS・リモート画像は読み込めない。CSS と JS はページ内にインラインで書き、画像は data URI で埋める
-- **`<a download>` やスクリプト起動のダウンロードで代替しない。** Artifact のサンドボックスではどちらも動かない
-- **data URI は Artifact の 16MB 上限に含まれる。** 触れそうなら貼る前に画像を縮小する。
-  ライトボックスは縮小後の画像を等倍まで拡大するだけで、原寸を復元するものではない
-- **before / after は横並びのまま。** 拡大できるようになっても、`after` だけを貼ってよいことにはならない
+- **Write it self-contained.** Artifacts are blocked by CSP from talking to external hosts. CDN libraries,
+  external CSS, and remote images cannot be loaded. Write CSS and JS inline in the page, and embed images as data URIs
+- **Do not substitute `<a download>` or script-triggered downloads.** Neither works in the Artifact sandbox
+- **Data URIs count toward the Artifact's 16MB limit.** If you might hit it, shrink the images before embedding.
+  The lightbox only enlarges the shrunk image up to its natural size; it does not restore the original resolution
+- **Keep before / after side by side.** Being able to enlarge does not make it acceptable to include only `after`
 
 ---
 
-## 実装
+## Implementation
 
-そのまま貼れる最小の実装。クラス名は変えてよいが、**3経路の閉じ方と画像0枚時の安全性は落とさない**。
+A minimal implementation you can paste as-is. You may change class names, but **do not drop the three ways to close or the zero-image safety**.
 
-### マークアップ
+UI strings in the page (button text, `aria-label`, captions, `alt`) are written in the user's language — see `user-language.md` in the same directory. The English strings below are examples.
+
+### Markup
 
 ```html
 <div class="shots">
   <figure class="shot">
     <img class="zoomable" role="button" tabindex="0"
-         alt="before: 変更前のサイドバー" src="data:image/png;base64,...">
+         alt="before: sidebar before the change" src="data:image/png;base64,...">
     <figcaption>before</figcaption>
   </figure>
   <figure class="shot">
     <img class="zoomable" role="button" tabindex="0"
-         alt="after: 変更後のサイドバー" src="data:image/png;base64,...">
+         alt="after: sidebar after the change" src="data:image/png;base64,...">
     <figcaption>after</figcaption>
   </figure>
 </div>
 
 <div id="lightbox" aria-hidden="true">
-  <button id="lightbox-close" type="button" aria-label="拡大表示を閉じる">✕</button>
+  <button id="lightbox-close" type="button" aria-label="Close enlarged view">✕</button>
   <img id="lightbox-img" alt="">
 </div>
 ```
@@ -122,7 +124,7 @@ body.lightbox-open { overflow: hidden; }
   var box = document.getElementById('lightbox');
   var full = document.getElementById('lightbox-img');
   var closeBtn = document.getElementById('lightbox-close');
-  // 画像を1枚も貼らない報告でも、ここで静かに抜けてエラーにしない
+  // Even in a report with no images, exit quietly here instead of throwing
   if (!box || !full || !closeBtn) return;
 
   var lastFocused = null;
@@ -146,7 +148,7 @@ body.lightbox-open { overflow: hidden; }
     if (lastFocused) lastFocused.focus();
   }
 
-  // 対象が0枚なら forEach が空で回るだけで済む
+  // With zero targets, forEach simply iterates over nothing
   document.querySelectorAll('.zoomable').forEach(function (img) {
     img.addEventListener('click', function () { open(img); });
     img.addEventListener('keydown', function (e) {
@@ -154,11 +156,11 @@ body.lightbox-open { overflow: hidden; }
     });
   });
 
-  closeBtn.addEventListener('click', close);                      // 経路1: 閉じるボタン
-  box.addEventListener('click', function (e) {                    // 経路2: 背景クリック
+  closeBtn.addEventListener('click', close);                      // Way 1: close button
+  box.addEventListener('click', function (e) {                    // Way 2: clicking the backdrop
     if (e.target === box || e.target === full) close();
   });
-  document.addEventListener('keydown', function (e) {             // 経路3: Esc
+  document.addEventListener('keydown', function (e) {             // Way 3: Esc
     if (e.key === 'Escape') close();
   });
 })();
@@ -166,12 +168,12 @@ body.lightbox-open { overflow: hidden; }
 
 ---
 
-## 公開前の確認
+## Check before publishing
 
-Artifact を公開したら、**実際に開いて次を確認してから完了報告に進む**。
+After publishing the Artifact, **actually open it and confirm the following before moving on to the completion report**.
 
-- [ ] サムネイルをクリックすると拡大表示される
-- [ ] Esc で閉じる
-- [ ] オーバーレイの背景クリックで閉じる
-- [ ] 閉じるボタンで閉じる
-- [ ] ライト / ダークの両方で画像の縁が背景に溶けていない
+- [ ] Clicking a thumbnail enlarges it
+- [ ] Esc closes it
+- [ ] Clicking the overlay backdrop closes it
+- [ ] The close button closes it
+- [ ] Image edges do not blend into the background in both light and dark

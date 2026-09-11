@@ -72,7 +72,9 @@ echo
 echo "pending 中のブロックと許可"
 setup; arm
 run_pre "Bash" '{"command":"ls"}'; check "Bash(ls) はブロック" "$?" "2"
-grep -q "到達点" "$SANDBOX/err" && ok "ブロック文が到達点に言及する" || ng "ブロック文が到達点に言及する"
+grep -q "goal" "$SANDBOX/err" && ok "ブロック文が到達点（goal）に言及する" || ng "ブロック文が到達点（goal）に言及する"
+grep -q "header: Goal" "$SANDBOX/err" && ok "ブロック文が header: Goal で聞くよう案内する" || ng "ブロック文が header: Goal で聞くよう案内する"
+grep -q "another language" "$SANDBOX/err" && ok "ブロック文がほかの言語で聞いたときの record を案内する" || ng "ブロック文がほかの言語で聞いたときの record を案内する"
 grep -q "ship-goal.sh" "$SANDBOX/err" && ok "ブロック文が記録スクリプトのパスを含む" || ng "ブロック文が記録スクリプトのパスを含む"
 run_pre "Read" '{"file_path":"/tmp/x"}'; check "Read もブロック（調査もゲートの後）" "$?" "2"
 run_pre "Agent" '{"prompt":"x"}'; check "Agent もブロック" "$?" "2"
@@ -171,6 +173,39 @@ setup; arm
 Q3='{"questions":[{"question":"色は？","header":"配色","options":[],"multiSelect":false}]}'
 run_post "$Q3" '{"answers":{"色は？":"青"}}'
 check "無関係な質問では記録しない" "$(state_field phase)" "pending"
+setup; arm
+QM='{"questions":[{"question":"How far?","header":"Goal","options":[],"multiSelect":false},{"question":"Color?","header":"配色","options":[],"multiSelect":false}]}'
+run_post "$QM" '{"answers":{"Color?":"blue"}}'
+check "Goal と無関係な質問を同時に聞き、無関係な回答だけ返っても記録しない" "$(state_field phase)" "pending"
+setup; arm
+run_post "$QM" '{"answers":{"How far?":"Up to merge","Color?":"blue"}}'
+check "同時に聞いても Goal の回答は記録される" "$(state_field goal)" "Up to merge"
+setup; arm
+run_post "$Q" '{"answers":{"別のキー":"マージまで"}}'
+check "1問だけならキーが合わない回答形式でも記録される（保険が残っている）" "$(state_field goal)" "マージまで"
+
+echo
+echo "ユーザーの言語で聞いても記録できる"
+setup; arm
+Q4='{"questions":[{"question":"How far should I take this?","header":"Goal","options":[],"multiSelect":false}]}'
+run_post "$Q4" '{"answers":{"How far should I take this?":"Up to PR (Recommended)"}}'
+check "header: Goal の回答が記録される" "$(state_field phase)" "active"
+check "Goal の回答が goal になる" "$(state_field goal)" "Up to PR (Recommended)"
+setup; arm
+Q5='{"questions":[{"question":"How should I proceed?","header":"Approach","options":[],"multiSelect":false}]}'
+run_post "$Q5" '{"answers":{"How should I proceed?":"Investigate and answer only"}}'
+check "header: Approach の回答が記録される" "$(state_field goal)" "Investigate and answer only"
+setup; arm
+Q6='{"questions":[{"question":"어디까지 진행할까요?","header":"목표","options":[],"multiSelect":false}]}'
+run_post "$Q6" '{"answers":{"어디까지 진행할까요?":"PR 생성까지"}}'
+check "既知でない言語の header では自動記録しない" "$(state_field phase)" "pending"
+run_pre "Bash" '{"command":"ls"}'
+check "記録されていなければ次のツールはブロック" "$?" "2"
+grep -q "record" "$SANDBOX/err" && ok "ブロック文が record での記録を案内する" || ng "ブロック文が record での記録を案内する"
+run_goal record "PR 생성까지"; check "ほかの言語の到達点も record で記録できる" "$?" "0"
+check "record 後は active" "$(state_field phase)" "active"
+check "ほかの言語の到達点がそのまま goal になる" "$(state_field goal)" "PR 생성까지"
+run_pre "Bash" '{"command":"ls"}'; check "record 後は Bash が通る" "$?" "0"
 
 echo
 echo "フェイルオープン"

@@ -1,214 +1,220 @@
 ---
 name: ship-session
-description: 機能要望やタスクを GitHub Issue に落とし、そのまま同じセッションで受け入れ条件を全て満たす・検証が緑・レビュー指摘0件になるまで実装しきるワークフロー。着手前に到達点（Issue化まで / 実装まで / PR作成まで / マージまで）を1回だけ決めて、そこで止まる。「これを ship して」「ship-session で回して」「Issue にして緑まで実装して」「この要望を出荷して」等と言われたときに使う。
+description: Workflow that turns a feature request or task into a GitHub Issue and then, in the same session, implements it until every acceptance criterion is met, verification is green, and there are zero review findings. Before starting, it fixes the goal exactly once (up to Issue / implementation / PR / merge) and stops there. Use when the user says things like "ship this", "run this through ship-session", "make it an Issue and implement it until green", "ship this request", or in Japanese 「これを ship して」「ship-session で回して」「Issue にして緑まで実装して」「この要望を出荷して」.
 ---
 
-# ship-session — Issue 化から、停止条件を満たすまで実装しきる
+# ship-session — from Issue to implementation, until the stop conditions are met
 
-ユーザーの要望を次の順で出荷する。
+Ship the user's request in this order.
 
-0. **到達点の合意** — どこまでやるか（Issue化まで / 実装まで / PR作成まで / マージまで）を**最初に1回だけ**決める
-1. **Issue 作成** — 要件を固めて GitHub Issue を作る（`create-issue` スキルに委譲）
-2. **実装ループ** — その Issue を対象に `issue-loop` スキルに委譲し、停止条件まで反復する
-3. **次アクションの提示** — 止まった直後に、続きの選択肢を選択式で1回出す
+0. **Agree on the goal** — decide how far to go (Issue only / implementation only / up to PR / up to merge) **once, at the start**
+1. **Create the Issue** — settle the requirements and create a GitHub Issue (delegate to the `create-issue` skill)
+2. **Implementation loop** — delegate that Issue to the `issue-loop` skill and iterate until the stop conditions are met
+3. **Offer the next step** — right after stopping, offer the follow-up options once as a multiple-choice question
 
-**Phase 0 で入口を聞き、Phase 3 で出口を聞く**のがこのスキルの形。止まった地点を報告して黙って終わらない。
+The shape of this skill is: **ask about the entry in Phase 0, ask about the exit in Phase 3.** Do not just report where you stopped and go silent.
+
+## Use the user's language
+
+Questions, progress updates, reports, and Artifacts are written in the user's language. This skill body and its canonical labels are in English; translate them when you output them. How to decide the language and what not to translate are defined in `skills/_shared/user-language.md`.
 
 ---
 
-## Phase 0: 到達点を最初に決める
+## Phase 0: Decide the goal first
 
-ship-session はどこまで進めるかで結果が大きく変わる。Issue が1本立つだけか、マージまで行くか。だから**着手前に1回だけ聞き、以降は聞き直さない**。
+The outcome of ship-session changes a lot depending on how far it goes: a single Issue, or all the way to merge. So **ask once before starting, and do not ask again afterwards**.
 
-### ゲート: 何より先に到達点を確定させる（必須）
+### Gate: fix the goal before anything else (required)
 
-**セッション名のリネーム以外のツールを1つも呼ぶ前に、到達点を確定させる。** ファイル読み取り・`gh` の実行・サブエージェントの起動・コード調査は、すべてこのゲートの後。
+**Before calling any tool other than renaming the session, fix the goal.** Reading files, running `gh`, launching subagents, and investigating code all come after this gate.
 
-- **理由**: 到達点が未合意だと、以降のフェーズ遷移を駆動するものが何も残らない。実際、過去に ship-session を起動した21セッションを調べると、**Phase 0 を出した18件は18件すべて実装ループまで到達し、出さなかった3件は3件とも途中で止まっていた**。止まり方は「Issue を1本作った直後にターンが終わる」で、ユーザーには何も告げられない
-- **このゲートは hook でも強制される**（`hooks/ship-gate.py`）。ship-session を invoke した時点でゲートが張られ、到達点を記録するまで `AskUserQuestion`・セッション名のリネーム・記録スクリプト以外のツールは PreToolUse でブロックされる。ブロックされたら手順違反なので、指示に従って先に到達点を確定させること
-- **到達点の記録**は次のどちらかで行う（記録するとゲートが開く）
-  - `AskUserQuestion`（`header: "到達点"` または `"進め方"`）で聞く → **回答が自動で記録される**
-  - ユーザーの発話に明示されているなら `"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" record "<到達点>"` を実行する（例: `record "PR作成まで"`）
-- **「依頼が曖昧だから先に調べたい」はゲートを飛ばす理由にならない。** 調査の結果で到達点が変わることはあっても、到達点を決めずに調査へ入ると Phase 0 に戻ってこない。実際の停止例は「〜な気がする」という曖昧な症状報告で、到達点を聞かないまま調査 → Issue 作成へ流れ、そこで終わっている
-- 症状が曖昧で「何を作るか」が定まらない場合も、**「どこまでやるか」は先に決められる**。両者は別の問いなので、片方の曖昧さでもう片方を後回しにしない
+- **Why**: if the goal is not agreed, nothing is left to drive the later phase transitions. Looking at 21 past sessions that invoked ship-session, **all 18 that ran Phase 0 reached the implementation loop, and all 3 that skipped it stopped partway**. They stopped by "ending the turn right after creating one Issue", without telling the user anything
+- **This gate is also enforced by a hook** (`hooks/ship-gate.py`). The gate is set when ship-session is invoked, and until the goal is recorded, every tool other than `AskUserQuestion`, session renaming, and the recording script is blocked at PreToolUse. Being blocked means you broke the procedure; follow the message and fix the goal first
+- **Record the goal** in one of these ways (recording opens the gate)
+  - Ask with `AskUserQuestion` (`header: "Goal"` or `header: "Approach"`) → **the answer is recorded automatically**. The hook auto-records only when the header is `Goal` / `Approach` / `到達点` / `進め方`. **If you asked in any other language (e.g. a translated header in French), run `"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" record "<answer>"` right after the user answers**
+  - If the user's message states the goal explicitly, run `"${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" record "<goal>"` (e.g. `record "Up to PR"`)
+- **"The request is vague, so I want to investigate first" is not a reason to skip the gate.** The investigation may change the goal, but if you start investigating without a goal you never come back to Phase 0. A real stop case: a vague symptom report like "I feel like something is off" went to investigation → Issue creation without asking about the goal, and ended there
+- Even when the symptom is vague and "what to build" is unclear, **"how far to go" can be decided first**. They are separate questions, so do not let the vagueness of one postpone the other
 
-### 聞き方
+### How to ask
 
-ユーザーの発話から到達点が**明示されているなら聞かない**。判断できないときだけ `AskUserQuestion` を1問出す（`header: "到達点"`、`multiSelect: false`）。選択肢は次の4つを**この順**で。
+If the user's message **states the goal explicitly, do not ask**. Only when you cannot tell, ask one `AskUserQuestion` (`header: "Goal"`, translated into the user's language; `multiSelect: false`). Offer these 4 options **in this order**.
 
-| # | ラベル | description に書く内容 | 実際に走るもの |
+The labels, headers, questions, and descriptions in this skill's tables are canonical English. When you ask, translate them into the user's language (see `skills/_shared/user-language.md`).
+
+| # | Label | What to write in the description | What actually runs |
 | --- | --- | --- | --- |
-| 1 | **PR作成まで（推奨）** | 緑になったら draft PR を作って止まる。マージはあなたが確認して判断 | Phase 1 → Phase 2 |
-| 2 | マージまで | 検証の緑を確認して PR をマージし、ブランチ/worktree の後片付けまで行う | 上 + マージ + 後片付け |
-| 3 | 実装まで（PRは作らない） | 緑まで実装してブランチにコミットするだけ | Phase 1 → Phase 2（PR は作らない） |
-| 4 | Issue作成まで | 要件を Issue に落として止まる | Phase 1 のみ |
+| 1 | **Up to PR (Recommended)** | Once green, create a draft PR and stop. You review and decide on the merge | Phase 1 → Phase 2 |
+| 2 | Up to merge | Confirm verification is green, merge the PR, and clean up the branch/worktree | The above + merge + cleanup |
+| 3 | Implementation only (no PR) | Implement until green and just commit to the branch | Phase 1 → Phase 2 (no PR) |
+| 4 | Issue only | Write the requirements into an Issue and stop | Phase 1 only |
 
-推奨を「PR作成まで」にするのは、**マージだけはユーザーの目視判断を挟むのが安全側**だから。
+"Up to PR" is recommended because **keeping the user's own visual check before the merge is the safe side**.
 
-### 明示とみなす表現（聞かずに進める）
+### Phrases that count as explicit (proceed without asking)
 
-- 「マージまで」「マージして」「出しきって」→ **マージまで**
-- 「PR まで」「PR 作って」「draft PR まで」→ **PR作成まで**
-- 「Issue だけ」「Issue 化して」→ **Issue作成まで**（この場合は `create-issue` を直接使うほうが素直）
-- 何も言っていない → **聞く**
+- 「マージまで」「マージして」「出しきって」, "up to merge", "merge it" → **Up to merge**
+- 「PR まで」「PR 作って」「draft PR まで」, "make a PR", "up to a draft PR" → **Up to PR**
+- 「Issue だけ」「Issue 化して」, "just the Issue" → **Issue only** (in this case using `create-issue` directly is more natural)
+- Nothing said → **ask**
 
-明示されていて聞かずに進む場合も、**`ship-goal.sh record` で到達点を記録してから**進む（記録しないとゲートが開かない）。
+Even when the goal is explicit and you proceed without asking, **record it with `ship-goal.sh record` first** (the gate does not open without a record).
 
-### 出荷型でない依頼のとき
+### When the request is not shippable
 
-依頼が「Issue に落として実装する」形に**乗らない**ことがある — 純粋な質問、原因調査だけ、既存 PR の修正、リリース作業など。そう判断したら、到達点の質問の**代わりに**進め方を聞く（`AskUserQuestion` を1問、`header: "進め方"`）。選択肢は次の3つを**この順**で。
+Some requests **do not fit** the "write an Issue and implement it" shape — pure questions, root-cause investigation only, fixing an existing PR, release work, and so on. When you judge that, ask about the approach **instead of** the goal question (one `AskUserQuestion`, `header: "Approach"`). Offer these 3 options **in this order**.
 
-| # | ラベル | description に書く内容 |
+| # | Label | What to write in the description |
 | --- | --- | --- |
-| 1 | **調査・回答だけする（推奨）** | ship-session の手順には乗せず、その場で調べて答えて終わる |
-| 2 | Issue 化して実装まで回す | 要望として解釈し直し、通常の到達点の質問に進む |
-| 3 | 別のスキルに任せる | 該当するスキル名を挙げて引き渡す |
+| 1 | **Investigate and answer only (Recommended)** | Do not follow the ship-session procedure; investigate on the spot, answer, and finish |
+| 2 | Turn it into an Issue and implement | Reinterpret it as a request and move on to the normal goal question |
+| 3 | Hand off to another skill | Name the matching skill and hand it off |
 
-- **1 か 3 が選ばれたら ship-session はそこで役割を終える。** その場合も**無言で終わらない** — 何をしたか / どこへ引き渡したかを報告して締める
-- 判断を片道にしない。実は要望だったなら、選択肢2でユーザーが引き戻せる
-- **この分岐もゲートの一部。** 「出荷型でなさそうだから」と、聞かずに独自に調査・修正へ走らない（過去の停止例2件はこれ。ship-session の手順が丸ごと空回りしていた）
+- **If 1 or 3 is chosen, ship-session's job ends there.** Even then, **do not finish silently** — close by reporting what you did / where you handed it off
+- Do not make the decision one-way. If it really was a request, the user can pull it back with option 2
+- **This branch is part of the gate too.** Do not skip asking and run off to investigate or fix on your own because "it does not look shippable" (2 of the past stop cases were exactly this; the whole ship-session procedure spun idle)
 
-### 到達点の扱い
+### Handling the goal
 
-- 決まった到達点は**セッション内で保持**し、Phase 1/2 の委譲プロンプトに**明記する**。委譲先は ship-session の判断を知らないので、書かないと既定の draft PR 作成まで走る。
-- **途中で聞き直さない。** ただしユーザーが後から「やっぱりマージまで」と言えばその時点で更新する（`ship-goal.sh record` を新しい到達点で実行し直す）。
-- **選ばれた到達点を超えない。** 「Issue作成まで」で Issue を作ったら実装に進まない。「PR作成まで」でマージしない。
+- Keep the agreed goal **for the whole session**, and **state it explicitly** in the Phase 1/2 delegation prompts. The delegate does not know ship-session's decision; if you do not write it, it runs to its default of creating a draft PR.
+- **Do not ask again midway.** But if the user later says "actually, up to merge", update it at that point (run `ship-goal.sh record` again with the new goal).
+- **Do not go past the chosen goal.** With "Issue only", do not move on to implementation after creating the Issue. With "Up to PR", do not merge.
 
-### 「マージまで」のときだけ追加で行うこと
+### Extra steps only for "Up to merge"
 
-1. draft を外す（`gh pr ready <N>`）→ **チェックの緑を確認する**（`gh pr checks <N>`）
-   - **リポジトリに CI が無い場合、「チェック0件」は緑ではない。** その旨を報告し、ローカルで回した検証結果をマージの根拠として明示する
-2. **マージ方式はリポジトリ設定を引いてから決める**（一律にしない）
+1. Mark the PR ready (`gh pr ready <N>`) → **confirm the checks are green** (`gh pr checks <N>`)
+   - **If the repository has no CI, "0 checks" is not green.** Report that, and state the verification results you ran locally as the basis for the merge
+2. **Decide the merge method after reading the repository settings** (do not use one method for everything)
    ```bash
    gh api repos/<owner>/<repo> --jq '{squash:.allow_squash_merge, merge:.allow_merge_commit, rebase:.allow_rebase_merge}'
    ```
-   許可されていない方式を指定するとマージが失敗する
-3. マージ後は `issue-loop` の「マージ後のクリーンアップ」に従って後片付けする
-4. コンフリクト・CI 赤・レビュー必須などでマージできないときは、**force merge せず** `needs input:` でユーザーに返す
+   Specifying a method that is not allowed makes the merge fail
+3. After merging, clean up following `issue-loop`'s "Cleanup after merge"
+4. If you cannot merge because of conflicts, red CI, required reviews, etc., **do not force merge**; return to the user with `needs input:`
 
 ---
 
-## Phase 1: Issue 作成（create-issue に委譲）
+## Phase 1: Create the Issue (delegate to create-issue)
 
-1. **`create-issue` を invoke** し、args にタスク説明を渡す（空なら直近のユーザー発話を対象にする）。要件の深掘りから `gh issue create` まで create-issue が行う。**深掘りの往復を ship-session 側で急かさない。**
-2. 報告から **作成された Issue の番号 / URL を控える**（Phase 2 で使う）。
-   - ⚠ **create-issue が `result:` を書いても、それは中間報告であってこのターンの終わりではない。** 到達点が「Issue作成まで」でないなら、そのまま Phase 2 を実行する（詳細は「守ること」の該当節）
-3. create-issue がゴールを `AskUserQuestion` で確認したなら、**その合意がそのまま受け入れ条件の土台になる**。ship-session 側で重ねて質問しない。
-4. **到達点が「Issue作成まで」ならここで終わる。** Issue 番号 / URL を報告して完了シグナルを出す。
+1. **Invoke `create-issue`** and pass the task description as args (if empty, target the user's most recent message). create-issue does everything from digging into the requirements to `gh issue create`. **Do not rush the back-and-forth of that digging from the ship-session side.**
+2. From the report, **note the created Issue number / URL** (used in Phase 2).
+   - ⚠ **Even if create-issue writes `result:`, it is an interim report, not the end of this turn.** If the goal is not "Issue only", go straight on to Phase 2 (details in the matching section of "Rules to keep")
+3. If create-issue confirmed the goal with `AskUserQuestion`, **that agreement becomes the basis of the acceptance criteria as-is**. Do not ask again from the ship-session side.
+4. **If the goal is "Issue only", finish here.** Report the Issue number / URL and emit the completion signal.
 
-## Phase 2: 実装ループ（issue-loop に委譲）
+## Phase 2: Implementation loop (delegate to issue-loop)
 
-> 到達点が「Issue作成まで」以外のときだけ実行する。
+> Run this only when the goal is something other than "Issue only".
 
-1. Phase 1 で控えた Issue 番号を渡して **`issue-loop` を invoke** する。**Phase 0 で決めた到達点を args に明記する**（例: 「到達点は PR作成まで。マージはしない」）。
-2. ループ本体（実装 → 検証 → レビュー → ギャップ修正の反復、停止条件の評価、コミット / push / PR、worktree 運用）は **issue-loop の規定にそのまま従う**。ship-session 側で再実装しない。
+1. **Invoke `issue-loop`** with the Issue number noted in Phase 1. **State the goal decided in Phase 0 in the args** (e.g. "The goal is Up to PR. Do not merge.").
+2. For the loop itself (iterating implement → verify → review → fix gaps, evaluating the stop conditions, commit / push / PR, worktree handling), **follow issue-loop's rules as-is**. Do not reimplement them on the ship-session side.
 
 ---
 
-## Phase 3: 次アクションの提示（必須）
+## Phase 3: Offer the next step (required)
 
-完了報告を出したら、そこで黙って終わらない。**「次に何をするか」を `AskUserQuestion` で選択式に提示する。**
+After posting the completion report, do not go silent. **Offer "what to do next" as a multiple-choice `AskUserQuestion`.**
 
-ship-session は到達点で意図的に止まる設計なので、止まった直後は必ず続きの選択肢がある。それをユーザーに書かせるのは往復の無駄。
+ship-session is designed to stop deliberately at the goal, so right after stopping there are always follow-up options. Making the user type them out is a wasted round trip.
 
-- `AskUserQuestion` を**1問だけ**（`header: "次の手"`）。推奨を先頭に置き、ラベル末尾に「（推奨）」。
-- 選択肢は **Phase 0 の合意ではなく、実際に到達した地点**で決める（ブロックして手前で止まったならその行を使う）。
-- 選ばれたら**その場で実行に移る**。「終わる」なら何もせず締める。
-- **質問を投げたところでターンを終えない。** 回答を受け取り、選ばれた作業を実行してから `result:` を書く。
+- **Exactly one** `AskUserQuestion` (`header: "Next step"`). Put the recommended option first and append `(Recommended)` to its label.
+- Choose the options by **where you actually ended up**, not by the Phase 0 agreement (if you were blocked and stopped earlier, use that row).
+- When an option is chosen, **act on it right away**. If "Stop here" is chosen, do nothing and close.
+- **Do not end the turn after asking the question.** Receive the answer, carry out the chosen work, and then write `result:`.
 
-| 実際に止まった地点 | 選択肢（この順・先頭が推奨） |
+| Where you actually stopped | Options (in this order, first is recommended) |
 | --- | --- |
-| **Issue作成まで** | 1. 続けて実装ループを回す / 2. ここで終わる |
-| **実装まで（PR未作成）** | 1. draft PR を作る / 2. さらに直す / 3. ここで終わる |
-| **PR作成まで** | 1. マージまで進める / 2. さらに直す / 3. ここで終わる |
-| **マージまで** | 1. 反映を確認する / 2. 次のタスクを ship する / 3. ここで終わる |
-| **ブロックして中断** | 1. ブロック要因を回避して続ける / 2. 調査だけ深める / 3. ここで終わる |
+| **Issue only** | 1. Run the implementation loop next / 2. Stop here |
+| **Implementation only (no PR yet)** | 1. Create a draft PR / 2. Fix more / 3. Stop here |
+| **Up to PR** | 1. Proceed to merge / 2. Fix more / 3. Stop here |
+| **Up to merge** | 1. Check that it landed / 2. Ship the next task / 3. Stop here |
+| **Blocked and halted** | 1. Work around the blocker and continue / 2. Only dig deeper into the investigation / 3. Stop here |
 
-### 聞かない場合
+### When not to ask
 
-- **ユーザーが既に次の指示を出しているとき**（「PR まで作ったら次は X を」等）→ 聞かずにその指示へ進む
-- **`failed:` で終わるとき**（構造的に不可能）→ 選択肢を出さずに理由を返す
-- **`needs input:` で止まるとき** → ブロック解消に必要なものを聞くのが先
-
----
-
-## 守ること
-
-### ユーザーへの問いかけは選択式にする
-
-尋ねる場面は原則 `AskUserQuestion`。妥当な候補を 2〜4 個立て、**推奨を先頭**に置きラベル末尾に「（推奨）」を付ける。独立した論点は**1回にまとめて最大4問**。排他でないなら `multiSelect: true`。見比べる対象（レイアウト案・コード案）があるときは `preview` を使う。
-
-地の文で自由記述を求めてよいのは、**値そのものを聞くとき**（URL / ID / 具体的な文言）と、**認証など人手操作しかないとき**だけ。
-
-**聞く前に一度考える。** 自分で調べれば分かること、既に会話で決まったこと、慣習的な既定があることは聞かない。質問は「答えで次の行動が変わる」ときだけ。
-
-### 秘密を会話に出さない
-
-API キー・トークン・パスワードの**値**を、チャット・コミットメッセージ・PR 本文・Issue 本文に出力しない。マスクや部分表示（`sk-...abcd`）も含めて出さない。一度会話に出た時点で、その値はローテーションするしかなくなる。
-
-- シェルのリダイレクトで直接 `.env` / シークレットストアへ書き込み、報告は「`<ファイル名>` に書き込んだ」だけにする
-- 存在確認は値ではなく**有無**を報告する（`present` / `absent`）
-- **委譲先のエージェントにも同じ制約を明示する**（委譲プロンプトが唯一の文脈なので、自動では伝わらない）
-
-### 委譲先の `result:` は中間報告として扱う
-
-`create-issue` / `issue-loop` / `code-review` は `Skill` ツールで**同じターンに読み込まれる**。その末尾には各スキル自身の完了シグナル（「このスキルはここで完了」「`result:` を書いて締める」「最終ターンをツール呼び出しで終えない」）があり、**直近に読んだ指示として実行され、ship-session のターンごと終わらせてしまう**。
-
-- **委譲先が `result:` を書いても、それはその工程の中間報告であって、このターンの終わりではない。** 合意した到達点に達していないなら、そのまま次の Phase を実行する
-- **ターンを締めてよいのは3つの場合だけ** — 合意した到達点に達したとき / 人手が要って `needs input:` のとき / 構造的に不可能で `failed:` のとき
-- 委譲プロンプトに「**ship-session から呼ばれている。`result:` で締めず、成果を報告して呼び出し元に戻すこと**」と明記する。委譲先はこの文脈を他から得られない
-
-### 次の Phase を予告したまま終わらない
-
-**「Phase 2（実装ループ）へ戻ります」のように次の工程を地の文で予告したなら、同じターン内で `Skill` ツールの呼び出しまで到達させる。** 予告だけ書いてターンを終えるのは、ユーザーから見れば無言で止まったのと同じ — むしろ「進んでいる」と誤解させる分たちが悪い。
-
-- **委譲先の報告を受け取った直後の出力は、状況説明のテキストではなく次の `Skill` 呼び出しから始めてよい。** 説明が要るなら呼び出しと同じターンに書く。書くか書かないかで迷ったら、書かずに呼ぶ
-- 予告のテキストは、次の Phase に入る代わりにはならない。**宣言と実行を別のターンに分けない**
-
-**この規定が適用されない場合**（止まるのが正しい）:
-
-- **委譲先が `needs input:` / `failed:` で戻ったとき** — 次の Phase へ進まず、その内容をユーザーに返す
-- **合意した到達点に既に達しているとき** — 例えば到達点が「Issue作成まで」で Phase 1 を終えたなら、Phase 2 へ進まないのが正しい。**到達点の判定が先**であって、この規定が禁じるのは「到達点に達していないのに止まること」だけ
-
-### 到達点を超えない
-
-破壊的・外向きの操作は各委譲先の規定に従う。**PR のマージは Phase 0 で「マージまで」が選ばれたときだけ**行う。
-
-### レビュー工程を落とさない
-
-`code-review` が外部 CLI（codex）に委譲する設計になっているが、**それが使えないときも工程を飛ばさない**。レンズを分けた複数のサブエージェントで多角的に読む（詳細は `code-review` スキル内の規定）。
-
-**「レビューツールが落ちていたので自分1人で読んだ」で完了報告に進まない。** 代替手段で回したなら、実施方法（何エージェント / 何レンズ）と読めなかった範囲を報告に明記する。
+- **When the user has already given the next instruction** (e.g. "after the PR, do X next") → proceed to that instruction without asking
+- **When finishing with `failed:`** (structurally impossible) → return the reason without offering options
+- **When stopping with `needs input:`** → first ask for what is needed to unblock
 
 ---
 
-## 完了報告
+## Rules to keep
 
-結果は地の文だけで済ませず、**原則 Artifact として公開して共有する**（`Artifact` ツール。既定は非公開で本人だけが見られる）。
+### Ask the user multiple-choice questions
 
-**必ず載せる項目**:
+When you need to ask, use `AskUserQuestion` by default. Offer 2–4 reasonable candidates, **put the recommended one first**, and append `(Recommended)` to its label. Bundle independent questions **into one call, up to 4 questions**. Use `multiSelect: true` when options are not mutually exclusive. When there is something to compare (layout options, code options), use `preview`.
 
-- **Phase 0 で合意した到達点と、実際にどこまで進んだか**
-- Issue 番号 / URL と PR
-- 委譲先（create-issue / issue-loop）が回した内容の要約
-- 停止条件の充足状況（受け入れ条件・検証・レビュー指摘）
-- **UI を変えたなら before / after のスクリーンショットを横並びで**（data URI で埋め込む。after だけは不可）
-  - 貼り方は `skills/_shared/artifact-images.md` に従う（**クリックで拡大できる状態にしてから公開する**）
+Ask for free-form text in prose only **when you need the value itself** (URL / ID / exact wording) and **when only a human can do it, such as authentication**.
 
-**作らなくてよい場合**: 到達点が「Issue作成まで」のとき（Issue 本体が成果物なので地の文で足りる）。委譲先が既に Artifact を作っているなら重複させず、その URL を参照する。
+**Think once before asking.** Do not ask about things you can find out yourself, things already decided in the conversation, or things with a conventional default. Ask only when "the answer changes what you do next".
 
-Artifact を書く前に `artifact-design` スキルを読む。`favicon`（絵文字1〜2個）と `description`（1文）を必ず渡す。
+### Keep secrets out of the conversation
 
-## 完了シグナル
+Do not output the **values** of API keys, tokens, or passwords in chat, commit messages, PR bodies, or Issue bodies. That includes masked or partial forms (`sk-...abcd`). Once a value appears in the conversation, the only fix is to rotate it.
 
-実行を終えたら、必ず**独立した行に `result:` + 自己完結の一行ヘッドライン**を書いて締める。
+- Write directly to `.env` / the secret store with shell redirection, and report only "wrote to `<file name>`"
+- Check existence by reporting **presence**, not the value (`present` / `absent`)
+- **State the same constraint explicitly to delegated agents** (the delegation prompt is their only context, so it is not passed on automatically)
+
+### Treat a delegate's `result:` as an interim report
+
+`create-issue` / `issue-loop` / `code-review` are **loaded in the same turn** via the `Skill` tool. Their endings carry each skill's own completion signal ("this skill is done here", "close with `result:`", "do not end the final turn with a tool call"), and **they get executed as the most recently read instructions, ending ship-session's turn along with them**.
+
+- **Even if a delegate writes `result:`, it is an interim report for that step, not the end of this turn.** If you have not reached the agreed goal, go straight on to the next Phase
+- **You may close the turn in only 3 cases** — when you have reached the agreed goal / when a human is needed and you write `needs input:` / when it is structurally impossible and you write `failed:`
+- State in the delegation prompt: "**Called from ship-session. Do not close with `result:`; report the outcome and return to the caller.**" The delegate cannot get this context anywhere else
+
+### Do not stop after announcing the next Phase
+
+**If you announce the next step in prose, like "Returning to Phase 2 (implementation loop)", call the `Skill` tool in the same turn.** Writing only the announcement and ending the turn looks, to the user, the same as stopping silently — worse, because it misleads them into thinking work is progressing.
+
+- **Right after receiving a delegate's report, your output may start with the next `Skill` call instead of a status explanation.** If an explanation is needed, write it in the same turn as the call. If unsure whether to write it, skip it and call
+- Announcement text is not a substitute for entering the next Phase. **Do not split the declaration and the execution into separate turns**
+
+**When this rule does not apply** (stopping is correct):
+
+- **When a delegate returns with `needs input:` / `failed:`** — do not move on to the next Phase; return its content to the user
+- **When you have already reached the agreed goal** — for example, if the goal is "Issue only" and Phase 1 is done, not moving on to Phase 2 is correct. **Check the goal first**; this rule only forbids "stopping before reaching the goal"
+
+### Do not go past the goal
+
+Destructive and outward-facing operations follow each delegate's rules. **Merge a PR only when "Up to merge" was chosen in Phase 0.**
+
+### Do not drop the review step
+
+`code-review` is designed to delegate to an external CLI (codex), but **do not skip the step when it is unavailable**. Read the diff from multiple angles with several subagents using separate lenses (details are in the `code-review` skill's rules).
+
+**Do not move on to the completion report with "the review tool was down, so I read it alone".** If you used an alternative, state in the report how you ran it (how many agents / which lenses) and what scope you could not read.
+
+---
+
+## Completion report
+
+Do not settle for prose alone; **by default, publish the result as an Artifact and share it** (the `Artifact` tool; private by default, visible only to the user).
+
+**Always include**:
+
+- **The goal agreed in Phase 0, and how far you actually got**
+- Issue number / URL and the PR
+- A summary of what the delegates (create-issue / issue-loop) ran
+- Status of the stop conditions (acceptance criteria, verification, review findings)
+- **If you changed the UI, before / after screenshots side by side** (embedded as data URIs; after-only is not acceptable)
+  - Follow `skills/_shared/artifact-images.md` for how to embed them (**make them click-to-enlarge before publishing**)
+
+**When you do not need one**: when the goal is "Issue only" (the Issue itself is the deliverable, so prose is enough). If a delegate already created an Artifact, do not duplicate it; reference its URL.
+
+Read the `artifact-design` skill before writing the Artifact. Always pass `favicon` (1–2 emoji) and `description` (one sentence).
+
+## Completion signal
+
+When you finish, always close with **`result:` plus a self-contained one-line headline on its own line**.
 
 ```
-result: Issue #123 のダークモード対応を実装し、検証緑・draft PR #124 を作成した
+result: Implemented dark mode for Issue #123, verification green, created draft PR #124
 ```
 
-- 人間の1アクション（認証・判断・権限付与）でしか進めないときは行頭に `needs input:`
-- 構造的に不可能（前提が偽・対象が無い）なら行頭に `failed:`
-- **最終ターンをツール呼び出しで終えない。** PR 作成や Artifact publish の後に必ずテキストで締める
+- If progress needs a single human action (authentication, a decision, granting permission), start the line with `needs input:`
+- If it is structurally impossible (a false premise, the target does not exist), start the line with `failed:`
+- **Do not end the final turn with a tool call.** Always close with text after creating a PR or publishing an Artifact
 
-**Phase 3 との順序**: 完了報告 → Phase 3 の `AskUserQuestion` → 回答を受け取ってから `result:` を書く。質問を投げたところでターンを終えない。続きが選ばれたなら、**その作業を実行してから** `result:` を書く（ヘッドラインは最終的に到達した地点を書く）。
+**Order with Phase 3**: completion report → Phase 3 `AskUserQuestion` → write `result:` after receiving the answer. Do not end the turn after asking the question. If a follow-up is chosen, **carry out that work first**, then write `result:` (the headline states where you finally ended up).

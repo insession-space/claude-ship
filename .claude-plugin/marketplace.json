@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-ship",
-  "description": "要望を Issue にして緑まで実装しきる ship ワークフローと、その依存スキル（create-issue / issue-loop / code-review）を配布する。",
+  "description": "Distributes the ship workflow that turns a request into an Issue and implements it until green, together with its dependent skills (create-issue / issue-loop / code-review).",
   "owner": {
     "name": "Seiya Kawamura"
   },
@@ -9,12 +9,12 @@
     {
       "name": "ship-session",
       "source": "./plugins/ship-session",
-      "description": "要望を GitHub Issue にして、受け入れ条件が全て埋まり・検証が緑・レビュー指摘0件になるまで同じセッションで実装しきるワークフロー。到達点（Issue化 / 実装 / PR / マージ）を着手前に1回だけ決めて、そこで止まる。"
+      "description": "A workflow that turns a request into a GitHub Issue and implements it in the same session until every acceptance criterion is met, verification is green, and the review has zero findings. It decides the goal (Issue / implementation / PR / merge) once before starting and stops there."
     },
     {
       "name": "graph-workflow",
       "source": "./plugins/graph-workflow",
-      "description": "タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行する。グラフ設計を先に見せて承認を取り、失敗時は resume で途中再開する。"
+      "description": "Breaks a task into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool. It shows the graph design for approval first and resumes midway on failure."
     }
   ]
 }
