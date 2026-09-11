@@ -1,30 +1,33 @@
 #!/bin/bash
 #  ship-session の到達点を記録する（Phase 0 ゲートの鍵）。
 #
-#    使い方: "${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" record "PR作成まで"
+#    使い方: "${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" record "Up to PR"
 #            "${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" status
 #            "${CLAUDE_PLUGIN_ROOT}/hooks/ship-goal.sh" clear
 #
 #  `record` すると `~/.claude/cache/ship-gate/<pid>.json` が active になり、
 #  ship-gate.py（PreToolUse hook）のブロックが解ける。
 #  ユーザーが後から到達点を変えたら、もう一度 `record` すればよい。
+#  到達点の値はユーザーの言語のまま記録してよい（自由記述）。
+#
+#  出力を読むのはエージェントなので、メッセージは英語で書く。
 set -uo pipefail
 
 PY=""
 for c in /usr/bin/python3 /opt/homebrew/bin/python3 "$(command -v python3 2>/dev/null)"; do
   [ -n "$c" ] && [ -x "$c" ] && PY="$c" && break
 done
-[ -z "$PY" ] && { echo "ship-goal: python3 が見つからない" >&2; exit 1; }
+[ -z "$PY" ] && { echo "ship-goal: python3 not found" >&2; exit 1; }
 
 CMD="${1:-}"
 case "$CMD" in
   record|status|clear) ;;
-  *) echo '使い方: ship-goal.sh record "<到達点>" | status | clear' >&2; exit 1 ;;
+  *) echo 'usage: ship-goal.sh record "<goal>" | status | clear' >&2; exit 1 ;;
 esac
 
 GOAL="${2:-}"
 if [ "$CMD" = "record" ] && [ -z "$GOAL" ]; then
-  echo '使い方: ship-goal.sh record "<到達点>"' >&2
+  echo 'usage: ship-goal.sh record "<goal>"' >&2
   exit 1
 fi
 
@@ -42,7 +45,7 @@ if ! [[ "$PID" =~ ^[0-9]+$ ]]; then
     p="$ppid"
   done
 fi
-[[ "$PID" =~ ^[0-9]+$ ]] || { echo "ship-goal: セッションの pid を特定できなかった" >&2; exit 1; }
+[[ "$PID" =~ ^[0-9]+$ ]] || { echo "ship-goal: could not determine the session pid" >&2; exit 1; }
 
 "$PY" - "$CMD" "$PID" "$GOAL" <<'PYEOF'
 import json, os, sys
@@ -64,11 +67,11 @@ def read():
 if cmd == "status":
     state = read()
     if not state:
-        print("到達点: 未設定（ゲートは張られていない）")
+        print("goal: not set (no gate is armed)")
     elif state.get("phase") == "active":
-        print("到達点: %s" % (state.get("goal") or "(記録なし)"))
+        print("goal: %s" % (state.get("goal") or "(nothing recorded)"))
     else:
-        print("到達点: 未確定（ゲートが張られている）")
+        print("goal: not decided yet (the gate is armed)")
     sys.exit(0)
 
 if cmd == "clear":
@@ -76,7 +79,7 @@ if cmd == "clear":
         os.unlink(path)
     except OSError:
         pass
-    print("ゲートの状態を消しました")
+    print("Cleared the gate state")
     sys.exit(0)
 
 # record: 既存の session_id は保持する（ゲートの張り主と突き合わせるため）
@@ -90,7 +93,7 @@ try:
         json.dump(state, f, ensure_ascii=False)
     os.replace(tmp, path)
 except Exception as e:
-    print("ship-goal: 記録に失敗 (%s)" % e, file=sys.stderr)
+    print("ship-goal: failed to record (%s)" % e, file=sys.stderr)
     sys.exit(1)
-print("到達点を「%s」に記録しました" % goal)
+print("Recorded the goal: %s" % goal)
 PYEOF

@@ -1,35 +1,39 @@
+English | [日本語](README.ja.md)
+
 # claude-ship
 
-Claude Code 用プラグインのマーケットプレイスです。複数のプラグインを1つのリポジトリで管理しています。
+A marketplace of plugins for Claude Code. Multiple plugins are managed in this single repository.
 
-## 入れる
+The plugins write questions, reports, and Artifacts in the user's language (Claude Code's `language` setting, or else the language of the user's latest message).
+
+## Install
 
 ```bash
 claude plugin marketplace add insession-space/claude-ship
 claude plugin install ship-session@claude-ship
 ```
 
-Claude Code を再起動すると使えます。
+Restart Claude Code and it is ready to use.
 
-## 含まれるプラグイン
+## Included plugins
 
-| プラグイン | 何をするか | ドキュメント |
+| Plugin | What it does | Docs |
 | --- | --- | --- |
-| `ship-session` | 要望を GitHub Issue にして、受け入れ条件が全て埋まり・検証が緑・レビュー指摘0件になるまで同じセッションで実装しきる | [plugins/ship-session](plugins/ship-session/README.md) |
-| `graph-workflow` | タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行する（設計→承認→実行→resume） | [plugins/graph-workflow](plugins/graph-workflow/README.md) |
+| `ship-session` | Turns a request into a GitHub Issue and implements it in the same session until every acceptance criterion is met, verification is green, and code review has zero findings | [plugins/ship-session](plugins/ship-session/README.md) |
+| `graph-workflow` | Breaks a task down into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool (design → approval → run → resume) | [plugins/graph-workflow](plugins/graph-workflow/README.md) |
 
-## リポジトリ構成
+## Repository layout
 
 ```
-.claude-plugin/marketplace.json   マーケットプレイスの定義（プラグイン一覧）
-plugins/<name>/                   各プラグイン本体
-  .claude-plugin/plugin.json      プラグインの manifest
-  SKILL.md / skills/ / hooks/     スキルと hook
-  tests/                          テスト
+.claude-plugin/marketplace.json   Marketplace definition (list of plugins)
+plugins/<name>/                   Each plugin
+  .claude-plugin/plugin.json      Plugin manifest
+  SKILL.md / skills/ / hooks/     Skills and hooks
+  tests/                          Tests
 ```
 
-プラグインを追加するときは `plugins/<name>/` を作り、`marketplace.json` の `plugins` 配列にエントリを足します。バージョンは各プラグインの `plugin.json` で独立に管理します。
+To add a plugin, create `plugins/<name>/` and add an entry to the `plugins` array in `marketplace.json`. Each plugin's version is managed independently in its own `plugin.json`.
 
-## ライセンス
+## License
 
 MIT

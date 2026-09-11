@@ -1,44 +1,46 @@
+English | [日本語](README.ja.md)
+
 # graph-workflow
 
-タスクを**ノード/エッジのグラフ**に分解し、Claude Code の Workflow ツールで決定的に並列実行するグラフエンジニアリングのプラグイン。
+A graph engineering plugin that decomposes a task into a **graph of nodes and edges** and runs it deterministically in parallel with Claude Code's Workflow tool.
 
-エージェントの自由さはノード（1責務のサブエージェント）の中に閉じ込め、フロー制御（分岐・反復・合流）はコードで縛ります。
+The agent's freedom is confined inside the nodes (single-responsibility sub-agents), and flow control (branching, loops, merging) is bound by code.
 
-## 入れる
+## Install
 
 ```bash
 claude plugin marketplace add insession-space/claude-ship
 claude plugin install graph-workflow@claude-ship
 ```
 
-## 使う
+## Use
 
 ```
-このリポジトリの全 API ハンドラを、正しさ・セキュリティ・性能の3観点でグラフで監査して
+Audit every API handler in this repository as a graph, from three angles: correctness, security, and performance
 ```
 
-「グラフで回して」「workflow で回して」「並列でレビュー/移行/調査して」等で起動します。
+It starts on phrases like "run this as a graph", "run a workflow for this", or "review/migrate/investigate in parallel". Questions and reports come in your language (Claude Code's `language` setting, or else the language you write in).
 
-## 何が起きるか
+## What happens
 
 ```
-Phase 0  適性判定とスカウト — グラフに向くか判定し、作業リストを自分で列挙する
+Phase 0  Fitness check and scouting — decide whether it suits a graph, and enumerate the work list itself
    ↓
-Phase 1  グラフ設計 — mermaid 図 + 規模見積もりを提示（承認は委譲経由・大規模・書き込み時のみ）
+Phase 1  Graph design — present a mermaid diagram + scale estimate (approval only when delegated, large, or writing)
    ↓
-Phase 2  スクリプト作成と実行 — workflow-authoring の規約に従い、schema で構造化して実行
+Phase 2  Write and run the script — follow the workflow-authoring conventions, structure with schema, and run
    ↓
-Phase 3  結果の統合と報告 — 件数を突き合わせ、runId / scriptPath を控えて報告
+Phase 3  Integrate and report results — reconcile the counts, note runId / scriptPath, and report
    ↓
-Phase 4  （失敗時）再開 — スクリプトを直して resume。無変更ノードはキャッシュから返る
+Phase 4  (on failure) Resume — fix the script and resume. Unchanged nodes return from the cache
 ```
 
-## 設計の考え方
+## Design philosophy
 
-- **承認は条件付き。** ユーザーが自分の言葉でグラフ実行を頼み、読み取り専用で、15体以下なら、設計図と規模を見せた上で**質問なしで実行**します（その発話自体が Workflow のオプトイン）。他スキル経由の委譲・15体超・書き込みを伴うときだけ `AskUserQuestion` で承認を取ります
-- **pipeline が既定、バリアは例外。** ステージ間で全結果が要るときだけ `parallel` で待つ
-- **グラフ化を目的化しない。** 探索的なタスク・1エージェントで済むタスクは、向かないと正直に言って通常進行を提案する
+- **Approval is conditional.** If you asked in your own words to run it as a graph, it is read-only, and it uses 15 agents or fewer, it shows the diagram and scale and then **runs without asking** (that request itself is the opt-in for Workflow). It asks for approval with `AskUserQuestion` only when delegated from another skill, over 15 agents, or involving writes
+- **pipeline is the default; barriers are the exception.** Wait with `parallel` only when a stage needs all results from the previous stage
+- **Graphing is not the goal.** For exploratory tasks or tasks one agent can handle, it honestly says they don't suit a graph and proposes the normal approach
 
-## ship-session との関係
+## Relationship to ship-session
 
-独立したプラグインで、単体で動きます。ship-session（同マーケットプレイス）の多角レビューや一斉適用の工程から委譲されて呼ばれることも想定しています。依存の向きは常に **ship-session → graph-workflow** です。
+This is an independent plugin and works on its own. It is also designed to be called by delegation from the multi-lens review and bulk-application steps of ship-session (in the same marketplace). The dependency always points **ship-session → graph-workflow**.

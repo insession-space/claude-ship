@@ -1,70 +1,77 @@
 ---
 name: session-naming
-description: セッション名を、ユーザーの表示言語の簡潔な名前に付け直す。Claude Code の自動命名は英語の kebab-case 固定なので、一覧で見分けがつくよう主題が確定した時点で1回だけ付け直す。「セッション名を付けて」「名前を日本語にして」「rename this session」と言われたとき、および UserPromptSubmit の催促（[セッション名] / [Session name] で始まる追加コンテキスト）を受け取ったときに使う。
+description: Rename the session to a concise name in the user's display language. Claude Code's automatic names are always English kebab-case, so rename once, as soon as the topic is clear, to make sessions easy to tell apart in the list. Use when the user says "name this session", "rename this session", 「セッション名を付けて」, or 「名前を日本語にして」, and when you receive the UserPromptSubmit reminder (additional context starting with [セッション名] / [Session name]).
 ---
 
-# session-naming — セッション名を表示言語で付け直す
+# session-naming — rename the session in the display language
 
-Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**（本体の命名プロンプトに
-`fix-login-bug` のような英語例が埋め込まれているため、`~/.claude/CLAUDE.md` の言語指定では
-変わらない）。一覧が `skill-session-naming-japanese` のような機械的な名前で並ぶと、
-セッションの見分けがつかない。**これは日本語で作業しているときに限った話ではない** —
-英語で作業していても、`fix-login-bug` より `Fix the login redirect` のほうが見分けがつく。
+Session names that Claude Code assigns automatically are **always English kebab-case** (the naming prompt
+inside Claude Code embeds English examples such as `fix-login-bug`, so a language setting in
+`~/.claude/CLAUDE.md` does not change them). When the list is full of mechanical names like
+`skill-session-naming-japanese`, sessions are hard to tell apart. **This is not limited to working in Japanese** —
+even when working in English, `Fix the login redirect` is easier to recognize than `fix-login-bug`.
 
-**主題が掴めた時点で、ユーザーの表示言語の名前に自分で付け直す。**
+**As soon as you have grasped the topic, rename the session yourself in the user's display language.**
 
-## やり方
+## How
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/hooks/rename-session.sh" "セッション名の自動リネームを仕込む"
+"${CLAUDE_PLUGIN_ROOT}/hooks/rename-session.sh" "Fix the login redirect"
 ```
 
-- **付けるタイミング**: ユーザーの依頼を読んで主題が確定した直後、最初の実作業と同じターンで1回。
-  依頼が来る前・主題が曖昧なうちは付けない（付け直しが増えるだけ）。
-- **付け直し**: 会話の途中で主題が大きく変わったら、そのときもう一度実行してよい。
-  細かい寄り道では変えない。
-- **報告しない**: 名前を付けたことはユーザーへの報告に含めない（作業の結果ではない）。
+- **When to name**: once, right after reading the user's request and the topic is settled, in the same turn as the first real work.
+  Do not name before a request arrives or while the topic is still vague (it only leads to more renames).
+- **Renaming**: if the topic changes substantially mid-conversation, you may run it again at that point.
+  Do not change it for small detours.
+- **Do not report it**: do not mention the naming in your report to the user (it is not a result of the work).
 
-## 名前の書き方
+## How to write the name
 
-- 「何をしているか」が一行で分かること。リポジトリ名やブランチ名は一覧の別列に出るので入れない。
-- 記号・引用符・絵文字は使わない。
-- 長さの目安は文字の幅で決まる。**全角2幅・半角1幅で数えて40幅**を超える分は、スクリプト側で
-  切り詰められる。
+- It should tell "what is being done" in one line. Do not include the repository or branch name; they appear in separate columns of the list.
+- Do not use symbols, quotation marks, or emoji.
+- The length limit is determined by character width. **Counting full-width as 2 and half-width as 1, anything beyond 40 columns**
+  is truncated by the script.
 
-| 表示言語 | 書き方 | 長さの目安 |
+| Display language | Style | Length |
 |---|---|---|
-| 日本語 | 体言止め | 全角10〜20文字 |
-| ラテン文字の言語 | 短い名詞句。文にしない | 20〜40文字 |
+| Japanese | Noun-ending phrase (体言止め) | 10–20 full-width characters |
+| Latin-script languages | Short noun phrase, not a sentence | 20–40 characters |
 
-| 良い | 悪い |
+| Good | Bad |
 |---|---|
 | ホーム画面のセッション選択を直す | fix-home-session-nav |
 | リリース手順の署名検証を通す | 作業 |
 | Fix the login redirect | fix-login-bug |
 | Sign the release build | Work on some things |
-| セッション名の自動リネームを仕込む | session-desk のセッション名まわりの調査と実装（長すぎ） |
+| セッション名の自動リネームを仕込む | session-desk のセッション名まわりの調査と実装 (too long) |
 
-## スクリプトが触るもの
+## What the script touches
 
-`hooks/rename-session.sh` は自セッションの pid を解決して次を書き換える。
+`hooks/rename-session.sh` resolves its own session's pid and rewrites the following.
 
-- `~/.claude/jobs/<jobId>/state.json` の `name` / `nameSource: "user"`
-  （**書き換えるのはここだけ**。Session Desk などの一覧はこの値を読む）
-- `~/.claude/cache/session-renamed/<pid>`（付け直し済みの印。催促 hook が再度促さないため）
+- `name` / `nameSource: "user"` in `~/.claude/jobs/<jobId>/state.json`
+  (**this is the only thing it rewrites**. Lists such as Session Desk read this value)
+- `~/.claude/cache/session-renamed/<pid>` (a marker that the session has been renamed, so the reminder hook does not prompt again)
 
-`~/.claude/sessions/<pid>.json` は `jobId` を引くために **読むだけ** で、書き換えない。
+`~/.claude/sessions/<pid>.json` is **only read** to look up the `jobId`; it is not rewritten.
 
-pid は `CLAUDE_CODE_MESSAGING_SOCKET`（`/tmp/cc-socks/<pid>.sock`）から取り、無ければ親プロセスを
-辿って `claude` を探す。
+The pid is taken from `CLAUDE_CODE_MESSAGING_SOCKET` (`/tmp/cc-socks/<pid>.sock`); if that is absent, the script walks up
+the parent processes looking for `claude`.
 
-## 効かないとき
+## When it does not work
 
-次の場合、スクリプトは終了コード1で止まり、催促 hook は何も出さない（いずれも異常ではない）。
+In the following cases the script stops with exit code 1 and the reminder hook outputs nothing (none of these are errors).
 
-- バックグラウンドジョブ以外のセッション（対応する `jobs/<jobId>` が無い）
-- `state.json` がまだ書かれていない / 壊れている
-- 既にユーザー由来の名前が付いている（`nameSource: "user"`、または付け直し済みの印がある）
+- The session is not a background job (there is no corresponding `jobs/<jobId>`)
+- `state.json` has not been written yet / is corrupted
+- A user-derived name is already set (`nameSource: "user"`, or the renamed marker exists)
 
-表示言語は `~/.claude/settings.local.json` → `~/.claude/settings.json` の `language`、
-無ければ `AppleLocale` の順に見る。**どれからも判定できないときは英語として促す**（黙らない）。
+The reminder hook reads the display language from `language` in `~/.claude/settings.local.json` → `~/.claude/settings.json`,
+then `AppleLocale` if neither has it. **If none of them decides it, it prompts as English** (it does not stay silent).
+The hook cannot see the conversation, which is why it falls back to `AppleLocale`.
+
+**The name itself follows `../_shared/user-language.md`** (the `language` setting → the language of the user's most recent
+message → English), the same order used for questions and reports. When no `language` is set and the user writes in a
+language different from `AppleLocale`, name the session in the language the user writes in, even if the reminder names
+another language.

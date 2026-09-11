@@ -1,142 +1,162 @@
+English | [日本語](README.ja.md)
+
 # claude-ship
 
-要望を GitHub Issue にして、**受け入れ条件が全て埋まり・検証が緑・レビュー指摘0件**になるまで同じセッションで実装しきる、Claude Code 用のワークフロープラグイン。
+A workflow plugin for Claude Code that turns a request into a GitHub Issue and implements it in the same session until **every acceptance criterion is met, verification is green, and code review has zero findings**.
 
-着手前に**到達点**（Issue化まで / 実装まで / PR作成まで / マージまで）を1回だけ決めて、**そこで止まる**のが特徴です。「気づいたらマージされていた」も「Issue を作って放置」も起きません。
+Its defining trait is that it decides the **goal** (Issue only / implementation only / up to PR / up to merge) **once**, before starting, and **stops there**. No more "it got merged before I noticed," and no more "it created an Issue and left it at that."
 
-## 入れる
+## Install
 
 ```bash
 claude plugin marketplace add insession-space/claude-ship
 claude plugin install ship-session@claude-ship
 ```
 
-Claude Code を再起動すると使えます。
+Restart Claude Code and it is ready to use.
 
-## 使う
-
-```
-/ship-session:ship-session ダークモードの切り替えを設定画面に足したい
-```
-
-あるいは普通に頼むだけでも起動します。
+## Usage
 
 ```
-この要望を ship して
+/ship-session:ship-session Add a dark mode toggle to settings.
 ```
 
-到達点を言い添えると、そこを聞かれずに進みます。
+Or just ask in plain words and it starts.
 
 ```
-/ship-session:ship-session 検索が遅いので直したい。PR まで作って
+ship this
 ```
 
-## 何が起きるか
+Mention the goal along with the request, and it proceeds without asking about it.
 
 ```
-Phase 0  到達点を1回だけ聞く（Issue化 / 実装 / PR / マージ）
+/ship-session:ship-session Add a dark mode toggle to settings. Make a PR.
+```
+
+Each skill's `description` carries trigger examples in both English and Japanese, so asking in Japanese (for example, `この要望を ship して`) starts it the same way.
+
+## What happens
+
+```
+Phase 0  Ask for the goal, once (Issue / implementation / PR / merge)
    ↓
-Phase 1  create-issue — 要件と仕様を深掘りして Issue を作る
+Phase 1  create-issue — dig into requirements and spec, then create the Issue
    ↓
-Phase 2  issue-loop  — 停止条件を満たすまで「実装 → 検証 → レビュー」を反復
+Phase 2  issue-loop  — repeat "implement → verify → review" until the stop conditions are met
    ↓
-Phase 3  止まった地点に応じて、次の選択肢を出す
+Phase 3  Offer next options based on where it stopped
 ```
 
-### 停止条件は3つ
+There are four goal options: Up to PR (Recommended) / Up to merge / Implementation only (no PR) / Issue only. These are the canonical English labels defined in the skill, and they are shown translated into the user's language.
 
-1. チケットの**受け入れ条件が全て**満たされている
-2. **検証が緑**（終了コード0。出力の grep では判定しない）
-3. **レビュー指摘0件**
+### Three stop conditions
 
-3つ揃うまでループします。上限（既定5周）に達したら、残っているギャップを列挙して止まります。
+1. **Every acceptance criterion** in the ticket is met
+2. **Verification is green** (exit code 0; never judged by grepping the output)
+3. **Zero review findings**
 
-### Phase 0 は hook で強制されます
+It loops until all three hold. If it hits the limit (5 rounds by default), it lists the remaining gaps and stops.
 
-Phase 0 は SKILL.md の指示だけでなく、**hook が機械的に守ります**（過去の実測で、Phase 0 を出したセッションは全て実装ループへ到達し、飛ばしたセッションは全て途中で無言停止していたため）。
+### Phase 0 is enforced by a hook
 
-1. ship-session を invoke すると `PreToolUse` hook（`hooks/ship-gate.py`）がゲートを張る
-2. 到達点が記録されるまで、`AskUserQuestion`・セッション名のリネーム・記録スクリプト以外のツール呼び出しは**ブロックされ、何をすべきかがエージェントに返る**（ファイル読み取りや調査もゲートの後です）
-3. 到達点は次のどちらかで記録され、ゲートが開く
-   - `AskUserQuestion`（header: 到達点 / 進め方）の回答を hook が**自動記録**する
-   - ユーザーの発話に明示されていれば、エージェントが `hooks/ship-goal.sh record "<到達点>"` を実行する
+Phase 0 is not just an instruction in SKILL.md; **a hook enforces it mechanically**. (In past measurements, every session that ran Phase 0 reached the implementation loop, and every session that skipped it stalled silently partway through.)
 
-状態は `~/.claude/cache/ship-gate/<pid>.json` に置かれ、セッションが変わった残骸はブロックの根拠にしません。判定に失敗した場合は**必ず素通し**します（ゲートは付加価値であって、ユーザーの作業を止めるものではありません）。ship-session を使わないセッションには何もしません。
+1. Invoking ship-session makes the `PreToolUse` hook (`hooks/ship-gate.py`) set up a gate
+2. Until the goal is recorded, every tool call other than `AskUserQuestion`, session renaming, and the recording script is **blocked, and the agent is told what to do instead** (reading files and investigating also come after the gate)
+3. The goal is recorded in one of the following ways, which opens the gate
+   - If the `AskUserQuestion` header is `Goal` / `Approach` (English) or `到達点` / `進め方` (Japanese), the hook **records the answer automatically**
+   - If the question was asked in another language, or the user's message states the goal explicitly, the agent runs `hooks/ship-goal.sh record "<goal>"`. If it forgets, the message on the next blocked tool call tells it to
 
-## セッション名を表示言語に付け直す
+State is kept in `~/.claude/cache/ship-gate/<pid>.json`, and leftovers from a different session are never used as grounds for blocking. If the check itself fails, it **always lets the call through** (the gate is an added safeguard, not something that should stop the user's work). Sessions that do not use ship-session are left untouched.
 
-Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**です（`fix-login-bug` のような英語例が本体の命名プロンプトに埋め込まれているため、`CLAUDE.md` で言語を指定しても変わりません）。一覧が機械的な名前で並ぶと見分けがつきません。日本語で作業していれば英語が並ぶ問題として、英語で作業していても `fix-login-bug` より `Fix the login redirect` が読める問題として、どちらにも効きます。
+## Speaks the user's language
 
-このプラグインを入れると、**`/ship-session` を使わない普通のセッションでも**次が起きます。
+The skill bodies are written in English, but **everything addressed to the user is written in the user's language**: `AskUserQuestion` questions and options, progress and completion reports, and Artifacts (title, body, and UI strings inside the page).
 
-1. 最初のプロンプトを送ると `UserPromptSubmit` hook が走り、セッション名がまだ自動生成のままなら「表示言語で付け直せ」とエージェントに伝える
-2. エージェントが依頼の主題を掴んだ時点で `hooks/rename-session.sh` を1回だけ実行する
-3. `~/.claude/jobs/<jobId>/state.json` の `name` が表示言語の名前になり、Session Desk などの一覧に反映される
+The language is decided by checking the following in order and using the first that decides it.
 
-**何もしない条件**（いずれも異常ではありません）。
+1. Claude Code's `language` setting (`~/.claude/settings.local.json` → `~/.claude/settings.json`)
+2. The language of the user's latest message
+3. English, if neither decides it
 
-- すでにユーザー由来の名前が付いている（`nameSource: "user"`、または付け直し済みの印がある）
-- バックグラウンドジョブ以外のセッション（書き込み先の `state.json` が無い）
-- 促した回数が上限（3回）に達している
+Code, commands, file paths, and the completion-signal prefixes `result:` / `needs input:` / `failed:` are not translated (callers look for them literally). GitHub Issues, pull requests, and commit messages follow the repository's existing convention (the language of existing Issues/PRs/commits, and any rule in `CLAUDE.md` / `CONTRIBUTING.md`); only when there is no convention are they written in the user's language.
 
-表示言語は `~/.claude/settings.local.json` → `~/.claude/settings.json` の `language`、無ければ `AppleLocale` の順に見ます。**どれからも判定できないときは英語として促します**（黙りません）。
+The rule itself lives in [`skills/_shared/user-language.md`](skills/_shared/user-language.md).
 
-書き換えるのは `state.json` の `name` / `nameSource` だけです。`~/.claude/sessions/<pid>.json` は `jobId` を引くために**読むだけ**で、書き換えません。hook が例外で落ちても、プロンプトの送信は止めません。
+## Renaming sessions in your display language
 
-手で付け直したいときは、そのまま頼んでください。
+The session names Claude Code generates automatically are **always English kebab-case** (an English example like `fix-login-bug` is embedded in the built-in naming prompt, so specifying a language in `CLAUDE.md` does not change it). When the session list is full of mechanical names, you cannot tell sessions apart. This helps either way: if you work in Japanese, it fixes a list full of English; if you work in English, `Fix the login redirect` is still easier to read than `fix-login-bug`.
+
+With this plugin installed, the following happens **even in ordinary sessions that do not use `/ship-session`**.
+
+1. When you send your first prompt, a `UserPromptSubmit` hook runs, and if the session name is still auto-generated, it tells the agent to rename it in your display language
+2. Once the agent has grasped what the request is about, it runs `hooks/rename-session.sh` exactly once
+3. `name` in `~/.claude/jobs/<jobId>/state.json` becomes a name in your display language, and it shows up in lists such as Session Desk
+
+**When it does nothing** (none of these are errors):
+
+- The session already has a user-given name (`nameSource: "user"`, or a marker that it has already been renamed)
+- The session is not a background job (there is no `state.json` to write to)
+- The reminder count has reached its limit (3)
+
+The display language is taken from `language` in `~/.claude/settings.local.json` → `~/.claude/settings.json`, falling back to `AppleLocale`. **If none of these decides it, the reminder assumes English** (it does not stay silent).
+
+Only `name` / `nameSource` in `state.json` are rewritten. `~/.claude/sessions/<pid>.json` is **only read**, to look up the `jobId`, and never rewritten. Even if the hook crashes with an exception, it does not stop the prompt from being sent.
+
+To rename a session by hand, just ask.
 
 ```
-セッション名を「リリース手順の署名検証を通す」にして
+Rename this session to "Pass signature verification in the release steps"
 ```
 
-## 含まれるスキル
+## Included skills
 
-| スキル | 役割 | 単体でも使えるか |
+| Skill | Role | Usable on its own |
 | --- | --- | --- |
-| `ship-session` | 到達点の合意 → Issue 化 → 実装ループ → 次アクション提示 | — |
-| `create-issue` | 要件と仕様を深掘りして Issue を作る（作成のみ） | ✔ |
-| `issue-loop` | 1つのチケットを停止条件まで反復実装する | ✔ |
-| `code-review` | 差分をレビューする | ✔ |
-| `session-naming` | セッション名をユーザーの表示言語で付け直す | ✔ |
+| `ship-session` | Agree on the goal → create the Issue → implementation loop → offer next actions | — |
+| `create-issue` | Dig into requirements and spec and create an Issue (creation only) | ✔ |
+| `issue-loop` | Iterate on implementing one ticket until the stop conditions are met | ✔ |
+| `code-review` | Review a diff | ✔ |
+| `session-naming` | Rename the session in the user's display language | ✔ |
 
-`ship-session` は下3つに委譲します。単体でも使えるので、「Issue だけ作りたい」「差分だけ見てほしい」ときは直接呼べます。
+`ship-session` delegates to the three skills below it. They also work on their own, so you can call them directly when you "just want an Issue" or "just want the diff reviewed."
 
-## 前提
+## Requirements
 
-- **`gh` CLI** が認証済みであること（Issue と PR の操作に使います）
-- git リポジトリの中で使うこと
+- **`gh` CLI** is authenticated (used for Issue and PR operations)
+- Used inside a git repository
 
-以下は**あれば使う**もので、無くても動きます。
+The following are **used if available**; everything works without them.
 
-- **外部レビュー CLI**（`codex` 等）— あればレビューと調査を委譲してトークンを節約します。無ければレンズを分けた複数のサブエージェントで代替します（**単独読みには落としません**）
-- **Notion MCP** — あれば Notion ページもチケットとして扱えます
+- **External review CLI** (`codex` etc.) — if available, review and investigation are delegated to it to save tokens. Otherwise, multiple subagents with separate lenses are used instead (**it never falls back to a single read-through**)
+- **Notion MCP** — if available, Notion pages can also be handled as tickets
 
-### 検証コマンドは自動で決めます
+### Verification commands are chosen automatically
 
-「このプロジェクトのビルドコマンド」を決め打ちしません。**CI の定義（`.github/workflows/`）を読むのが最優先**で、それが無ければリポジトリの形から判断します。
+It never hard-codes "this project's build command." **Reading the CI definitions (`.github/workflows/`) comes first**; if there are none, it decides from the shape of the repository.
 
-| 見つかるもの | 検証コマンドの候補 |
+| What it finds | Candidate verification commands |
 | --- | --- |
-| `package.json` | `scripts` を読む。パッケージマネージャは lockfile で判定 |
+| `package.json` | Read `scripts`. The package manager is determined from the lockfile |
 | `Package.swift` | `swift build` / `swift test` |
 | `go.mod` | `go build ./...` / `go test ./...` |
 | `Cargo.toml` | `cargo build` / `cargo test` |
-| `Gemfile` | `bundle exec rspec` 等 |
-| `Makefile` | ターゲットを実際に見る |
+| `Gemfile` | `bundle exec rspec` etc. |
+| `Makefile` | Actually look at the targets |
 
-決まらなければ、ループに入る前に確認します。
+If it still cannot decide, it asks before entering the loop.
 
-## 設計の考え方
+## Design principles
 
-このプラグインは、実際に失敗したパターンから逆算して作られています。
+This plugin was built by working backward from patterns that actually failed.
 
-- **到達点を先に決める** — 「どこまでやるか」が曖昧なまま走ると、Issue を作って止まってほしいときにマージまで行く
-- **仕様の深掘りを短縮しない** — 一文の要望を「背景 + 受け入れ条件2行」に整形しただけの Issue は、曖昧さが消えておらず実装フェーズで往復に化ける。深掘りの1ラウンドが実装の5ラウンドを防ぐ
-- **緑は終了コードで判定する** — 出力から `error` を探す方式は、失敗を成功と誤報告する
-- **頼まれていない情報階層の変更をしない** — 最も高くつく失敗は、実装中に落ちるのではなく**マージされたあとに丸ごと revert される**こと。聞くのは30秒、revert は1サイクル
-- **レビューを単独読みに落とさない** — 外部 CLI が使えないときに1人で通読すると、網羅性が落ちるのに**成功したレビューと同じ顔で報告される**
-- **作ったものは片付ける** — 起動したサーバー・撮ったスクショ・一時 worktree は、作った本人しか正確な範囲を知らない
+- **Decide the goal first** — if it runs while "how far to go" is still vague, it goes all the way to merge when you wanted it to stop after creating the Issue
+- **Do not cut the spec deep-dive short** — an Issue that merely reshapes a one-sentence request into "background + two lines of acceptance criteria" has not resolved its ambiguity, and that turns into back-and-forth during implementation. One round of digging prevents five rounds of implementation
+- **Judge green by exit code** — searching the output for `error` reports failures as successes
+- **Do not change information hierarchy nobody asked for** — the most expensive failure is not breaking during implementation but **getting reverted wholesale after merge**. Asking takes 30 seconds; a revert costs a full cycle
+- **Do not fall back to a single-reader review** — when no external CLI is available, one agent reading everything alone loses coverage yet **gets reported just like a successful review**
+- **Clean up what you created** — only the one who started a server, took a screenshot, or made a temporary worktree knows exactly what needs cleaning up
 
-## ライセンス
+## License
 
 MIT

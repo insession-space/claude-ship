@@ -1,107 +1,116 @@
 ---
 name: graph-workflow
-description: タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行する（グラフエンジニアリング）。グラフ設計を先に見せて承認を取り、実行し、失敗・中断時は resume で途中から再開する。「グラフで回して」「workflow で回して」「ファンアウトして」「並列で監査/レビュー/移行/調査して」等と言われたとき、および他スキル（ship-session の多角レビュー等）が並列編成を委譲するときに使う。
+description: Decomposes a task into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool (graph engineering). Shows the graph design first and gets approval, runs it, and on failure or interruption resumes from where it stopped. Use when the user says things like "run this as a graph", "fan this out", "run a workflow for this", or "audit/review/migrate/investigate in parallel" (in Japanese 「グラフで回して」「workflow で回して」「ファンアウトして」「並列で監査/レビュー/移行/調査して」), and when another skill (e.g. ship-session's multi-lens review) delegates parallel orchestration to it.
 ---
 
-# graph-workflow — 設計 → 承認 → 実行 → 再開
+# graph-workflow — design → approve → run → resume
 
-タスクを**ノード（1責務のサブエージェント）とエッジ（コードで書く制御フロー）のグラフ**に落とし、Workflow ツールで決定的に実行する。LLM の自由さはノードの中に閉じ込め、フロー制御は構造で縛る。
+Turn the task into a **graph of nodes (single-responsibility sub-agents) and edges (control flow written in code)**, and run it deterministically with the Workflow tool. Keep the LLM's freedom confined inside the nodes, and bind the flow control with structure.
 
-進行は4フェーズ。**Phase 1 で承認が要る条件に当てはまるなら、承認を取るまで Workflow を呼ばない。**
-
----
-
-## Phase 0: 適性判定とスカウト
-
-### 1. グラフに向くタスクか判定する
-
-**向く**: 作業リストが列挙できる定型仕事（全ファイル監査・一斉移行・観点を分けたレビュー・多方面の調査）、独立した視点の突き合わせ（judge panel・反証検証）、1コンテキストに収まらない規模。
-
-**向かない**: 探索的でタスクの形が事前に分からない（初見バグの調査）、対象が1〜2件で1エージェントで済む、逐次にしか進められない依存chain。
-
-向かないと判断したら**正直にそう言い**、通常進行（インライン or 単発サブエージェント）を提案して終わる。グラフ化はコストであって目的ではない。
-
-### 2. スカウトはインラインで行う
-
-グラフに流す**作業リスト（ファイル・PR・観点・対象）は自分で列挙する**。オーケストレーションの前に対象が確定していればよく、タスク全体の形を先に知る必要はない。
-
-- **サブエージェントに「探して処理して」と両方任せない。** 探索範囲がずれて穴が空く（issue-loop の委譲の柵と同じ理由）
-- 列挙した**件数を控える**。あとで結果の行数と突き合わせる
-
-## Phase 1: グラフ設計と承認
-
-### 設計の原則
-
-- **ノードは1責務**。プロンプトも検証も小さくする。出力は `schema`（JSON Schema）で構造化し、散文を受け取らない
-- **pipeline が既定**。バリア（`parallel` で全結果を待つ）は「全結果の重複排除」「0件なら後段スキップ」など、**前段の全結果を跨いで使うときだけ**
-- **エッジはコードで書く**。分岐・反復・脱出条件を JS の `if` / `while` にし、プロンプト内の指示にしない
-- 品質パターンは task に合わせて選ぶ: 反証検証（adversarial verify）/ 審査員団（judge panel）/ 枯れるまで探索（loop-until-dry）/ 多方面スイープ（multi-modal sweep）
-- エージェント数は **15体以下を目安**にする。超えるならユーザーがその規模を明示したときだけ
-
-### 設計の提示（常に行う）
-
-設計がまとまったら、**実行前に必ず提示する**（承認質問をスキップする場合も。黙って走らせない）:
-
-1. **グラフ図**（mermaid）— ノード・エッジ・サイクル（反復）・バリアの位置が見える形
-2. 各ノードの責務と出力 schema の要点（1行ずつ）
-3. **規模の見積もり** — エージェント数・フェーズ数・概算の重さ
-
-### 承認ゲート（条件付き）
-
-承認質問を出すかは次で決める。**ユーザーへの質問はコストなので、必要な条件に限る。**
-
-**質問なしでそのまま実行してよい**（3つすべて満たすとき）:
-
-- ユーザーが**自分の言葉で**グラフ/workflow の実行を頼んだ（「グラフで回して」「workflow で監査して」等）— この発話自体が Workflow ツールのオプトイン
-- **読み取り専用** — ノードがファイル・リポジトリ・外部状態への書き込みを伴わない（調査・レビュー・監査）
-- エージェント数が **15体以下**
-
-**`AskUserQuestion` で承認を取る**（1つでも当てはまるとき。`header: "実行可否"`、選択肢は **このグラフで実行する（推奨）** / 設計を変える / グラフ化をやめる）:
-
-- **他スキル（ship-session 等）からの委譲**で起動した — 呼び出し元への合意はグラフ実行の合意ではない
-- **15体を超える**規模
-- ノードが**書き込みを伴う**（一斉適用・移行・コミットを含む編集）
-
-「設計を変える」が選ばれたら修正して再提示する。
-
-## Phase 2: スクリプト作成と実行
-
-1. **`workflow-authoring` スキルを必ず先に読む**（script API・meta の制約・resume の規約はそちらが正）
-2. スクリプトの規律
-   - `meta` はピュアリテラル。`phases` を `phase()` と一致させる
-   - 全ノードに `schema` を渡し、`.filter(Boolean)` でスキップ/死亡を落とす
-   - カバレッジを削る判断（top-N・サンプリング）をしたら **`log()` で可視化**する。黙って間引かない
-   - `Date.now()` / `Math.random()` は使えない（resume を壊す）。時刻は args で渡す
-3. **秘密の値をプロンプトに焼き込まない。** ノードのプロンプトは各サブエージェントが得る唯一の文脈だが、シークレットは名前参照・環境変数ファイルで扱わせる
-4. 実行はバックグラウンドで走る。**tool result の `runId` と `scriptPath` を必ず控える**（Phase 4 の鍵）
-
-## Phase 3: 結果の統合と報告
-
-- 完了通知を受けたら結果を統合する。**空・想定外の結果は、推測する前に `<transcriptDir>/journal.jsonl` を読む**（各ノードの実際の返り値が記録されている）
-- 結果の**行数を Phase 0 で控えた件数と突き合わせる**。足りなければ理由を突き止めるまで「完了」と言わない
-- 報告に必ず含める: グラフの実行結果の要約 / 対象件数と処理件数 / スキップ・失敗したノードとその理由 / `runId`・`scriptPath`（再開の鍵）
-
-## Phase 4: 再開（失敗・中断時）
-
-最初からやり直さない。**無変更のノードはキャッシュから即座に返る。**
-
-1. 落ちた・直したいノードを特定する（journal.jsonl）
-2. `scriptPath` のファイルを Edit で修正する
-3. `Workflow({scriptPath, resumeFromRunId})` で再実行する。編集した呼び出し以降だけが実際に走る
+The flow has four phases. **Do not call Workflow until the user approves** if any of the approval conditions in Phase 1 apply.
 
 ---
 
-## 守ること
+## Use the user's language
 
-- **承認が要る条件（委譲経由・15体超・書き込みあり）で、承認なしに Workflow を呼ばない。** スキップできるのは3条件を全て満たすときだけで、その場合も設計図と規模の提示は省かない
-- **ユーザーへの問いかけは原則 `AskUserQuestion`（選択式）。** 推奨を先頭、独立した論点は1回にまとめる
-- **グラフ化を目的化しない。** 向かないタスクは向かないと言う
-- **秘密の値**をチャット・スクリプト・ノードのプロンプトに出さない
+**Everything addressed to the user is in the user's language.** The canonical labels in this skill are English — translate them when you ask or report.
 
-## 完了シグナル
+- **In the user's language**: `AskUserQuestion` `question` / `header` / option `label` and `description`, including the recommended marker (`(Recommended)` in English, `（推奨）` in Japanese); the graph design shown for approval (mermaid node labels may stay short English identifiers, but the explanations are in the user's language); progress updates; reports; Artifacts (`<title>`, body, `description`, and UI strings inside the page)
+- **Decide the language in this order**: (1) Claude Code's `language` setting (`~/.claude/settings.local.json`, then `~/.claude/settings.json`), (2) the language of the user's most recent message, (3) English
+- **Do not translate**: code, commands, paths, identifiers, or the `result:` / `needs input:` / `failed:` prefixes (only the headline after them is translated). Prompts sent to workflow sub-agents may be in English; the findings you report to the user are in the user's language
+- **GitHub Issues, PRs, and commit messages** follow the repository's existing language convention; when there is none, use the user's language
 
-**最初に、呼び出し元があるかを判定する。**
+## Phase 0: Fitness check and scouting
 
-**他スキル（ship-session / issue-loop 等）から呼ばれているときは `result:` を書かない。** 成果（統合結果・runId・scriptPath）を報告して呼び出し元に戻す。人手が要るなら `needs input:`、構造的に不可能なら `failed:` を行頭に書いて戻す（この2つは呼び出し元があっても書く）。
+### 1. Decide whether the task suits a graph
 
-**単体で起動されたときは**、独立した行に `result:` + 自己完結の一行ヘッドラインを書いて締める。**最終ターンをツール呼び出しで終えない。**
+**Suits a graph**: routine work whose work list can be enumerated (auditing every file, a bulk migration, a review split by lens, a multi-directional investigation), cross-checking independent viewpoints (judge panel, adversarial verification), or a scale that doesn't fit in one context.
+
+**Doesn't suit a graph**: exploratory work where the shape of the task isn't known up front (investigating a bug you've never seen), only 1–2 targets that one agent can handle, or a dependency chain that can only proceed sequentially.
+
+If you judge it doesn't suit a graph, **say so honestly**, propose the normal approach (inline or a single sub-agent), and stop. Graphing is a cost, not a goal.
+
+### 2. Scout inline
+
+**Enumerate the work list (files, PRs, lenses, targets) that flows into the graph yourself.** The targets only need to be fixed before orchestration; you don't need to know the shape of the whole task up front.
+
+- **Don't hand a sub-agent both "find them and process them".** The search scope drifts and leaves holes (same reason as issue-loop's delegation guardrail)
+- **Note the count** you enumerated. Later, reconcile it against the row count of the results
+
+## Phase 1: Graph design and approval
+
+### Design principles
+
+- **Each node has one responsibility.** Keep its prompt and its verification small. Structure its output with a `schema` (JSON Schema); don't accept prose
+- **pipeline is the default.** Use a barrier (`parallel`, waiting for all results) **only when a later stage needs all of the earlier stage's results at once**, e.g. "deduplicate across all results" or "skip the later stage if there are 0 results"
+- **Write edges in code.** Make branches, loops, and exit conditions JS `if` / `while`, not instructions inside a prompt
+- Pick quality patterns to fit the task: adversarial verify / judge panel / loop-until-dry / multi-modal sweep
+- Aim for **15 agents or fewer**. Go beyond that only when the user has explicitly asked for that scale
+
+### Presenting the design (always)
+
+Once the design is settled, **always present it before running** (even when you skip the approval question — never run it silently):
+
+1. **Graph diagram** (mermaid) — in a form that shows the nodes, edges, cycles (loops), and where the barriers are
+2. Each node's responsibility and the gist of its output schema (one line each)
+3. **Scale estimate** — number of agents, number of phases, and a rough sense of weight
+
+### Approval gate (conditional)
+
+Decide whether to ask the approval question as follows. **Questions cost the user, so ask only when these conditions require it.**
+
+**You may run without asking** (when all three hold):
+
+- The user asked **in their own words** to run it as a graph/workflow ("run this as a graph", "audit this with a workflow", etc.) — that utterance itself is the opt-in for the Workflow tool
+- **Read-only** — no node writes to files, the repository, or external state (investigation, review, audit)
+- **15 agents or fewer**
+
+**Get approval with `AskUserQuestion`** (when any one applies; `header: "Approval"`, options **Run this graph (Recommended)** / Change the design / Don't run as a graph):
+
+- You were **launched via delegation** from another skill (ship-session, etc.) — agreement with the caller is not agreement to run the graph
+- The scale is **more than 15 agents**
+- A node **involves writes** (bulk application, migration, edits that include commits)
+
+If "Change the design" is chosen, revise it and present it again.
+
+## Phase 2: Writing and running the script
+
+1. **Always read the `workflow-authoring` skill first** (it is the source of truth for the script API, the `meta` constraints, and the resume conventions)
+2. Script discipline
+   - `meta` is a pure literal. Keep `phases` consistent with `phase()`
+   - Pass a `schema` to every node, and drop skipped/dead ones with `.filter(Boolean)`
+   - If you decide to cut coverage (top-N, sampling), **make it visible with `log()`**. Don't thin things out silently
+   - `Date.now()` / `Math.random()` are not allowed (they break resume). Pass times in through args
+3. **Do not bake secret values into prompts.** A node's prompt is the only context each sub-agent gets, but have secrets handled by name reference or through env files
+4. The run happens in the background. **Always note the `runId` and `scriptPath` from the tool result** (the keys for Phase 4)
+
+## Phase 3: Integrating and reporting results
+
+- When the completion notification arrives, integrate the results. **For empty or unexpected results, read `<transcriptDir>/journal.jsonl` before guessing** (it records each node's actual return value)
+- **Reconcile the row count of the results against the count you noted in Phase 0.** If it falls short, don't say "done" until you've found out why
+- The report must include: a summary of the graph run / the number of targets and the number processed / skipped or failed nodes and why / `runId` and `scriptPath` (the keys to resume)
+
+## Phase 4: Resume (on failure or interruption)
+
+Don't start over. **Unchanged nodes return instantly from the cache.**
+
+1. Identify the nodes that failed or that you want to fix (journal.jsonl)
+2. Fix the file at `scriptPath` with Edit
+3. Re-run with `Workflow({scriptPath, resumeFromRunId})`. Only the edited call and those after it actually run
+
+---
+
+## Rules
+
+- **When an approval condition applies (launched via delegation, more than 15 agents, writes involved), do not call Workflow without approval.** You may skip the question only when all three conditions hold, and even then do not skip presenting the diagram and the scale
+- **Ask the user questions with `AskUserQuestion` (multiple choice) by default.** Put the recommended option first, and bundle independent questions into one call
+- **Don't make graphing the goal.** Say so when a task doesn't suit a graph
+- Never put **secret values** in the chat, the script, or node prompts
+
+## Completion signal
+
+**First, determine whether there is a caller.**
+
+**When called from another skill (ship-session / issue-loop, etc.), do not write `result:`.** Report the outcome (integrated results, runId, scriptPath) and return to the caller. If a human is needed, start a line with `needs input:`; if it is structurally impossible, start a line with `failed:`, and return (write these two even when there is a caller).
+
+**When launched on its own**, close with `result:` on its own line followed by a self-contained one-line headline. **Do not end the final turn with a tool call.**
