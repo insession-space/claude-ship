@@ -112,6 +112,17 @@ check "別の場所にあっても中身が同一なら通る" "$?" "0"
 printf '\n# tampered\n' >> "$TWIN/rename-session.sh"
 run_pre "Bash" "{\"command\":\"\\\"$TWIN/rename-session.sh\\\" \\\"名前\\\"\"}"
 check "同名でも中身が違えば拒否" "$?" "2"
+# 相対パスは Bash ツールの cwd で解決され、hook の cwd と一致するとは限らない。
+# hook の cwd に実体があっても（検査は通るが実行される実体が別かもしれない）拒否する
+( cd "$ROOT/.." && printf '{"hook_event_name":"PreToolUse","session_id":"%s","tool_name":"Bash","tool_input":{"command":"ship-session-jev/hooks/rename-session.sh \\"名前\\""}}' "$SID" \
+  | env -u TYPESAFE_API_KEY HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" >/dev/null 2>&1 )
+check "hook の cwd から辿れる相対パスでも拒否（絶対パスだけを許す）" "$?" "2"
+( cd "$ROOT/hooks" && printf '{"hook_event_name":"PreToolUse","session_id":"%s","tool_name":"Bash","tool_input":{"command":"./ship-goal.sh status"}}' "$SID" \
+  | env -u TYPESAFE_API_KEY HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" >/dev/null 2>&1 )
+check "hooks/ 自身を cwd にした ./ship-goal.sh も拒否" "$?" "2"
+mkfifo "$TWIN/ship-goal.sh"
+run_pre "Bash" "{\"command\":\"\\\"$TWIN/ship-goal.sh\\\" status\"}"
+check "同名の FIFO は開かずに拒否（hook が固まらない）" "$?" "2"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"PR作成まで\\\"\"}"
 check "ship-goal.sh は通る" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"Issue #12 の PR作成まで\\\"\"}"

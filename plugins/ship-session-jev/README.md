@@ -105,7 +105,8 @@ The four goals map 1:1 to `ship-session`'s canonical labels (`Issue only` / `Imp
 | Confidence below the threshold | Ask |
 | Connection error, timeout, 3xx (redirects are never followed), 401 / 422 / 429 / 5xx / 529 | Ask (no retry) |
 | Body is not JSON, has no `answers.goal`, `choice` / `confidence` have the wrong type, `choice` is not one of the five criteria, or `confidence` is outside 0–1 (including `NaN` / `Infinity`) | Ask |
-| The same request text is submitted again, or the agent re-invokes the skill after the first classification | Jev is not called again; the current state is reported |
+| The same request text is submitted again as a slash command | Jev is not called again; the current state is repeated to the agent as context |
+| The agent re-invokes the skill with the `Skill` tool after the first classification | Jev is not called again and nothing is printed; the agent reads `ship-goal.sh status` |
 | The user types the slash command again with a *different* request in the same session | Treated as a new task: Jev is called again and the previous goal is not carried over |
 
 Proxies: for `https://` endpoints the hook honours `https_proxy` / `HTTPS_PROXY` from the environment (the key travels inside TLS). It never reads macOS system proxy settings, and never sends a plain `http://` (loopback) request through a proxy.
@@ -120,6 +121,15 @@ Jev's decision is a normal goal record. Say "actually, Issue only" and the agent
 goal: Up to PR
 jev: decided the goal (up_to_pr, confidence 0.93)
 ```
+
+After you override it, the second line keeps the history:
+
+```
+goal: Issue only
+jev: decided Up to PR but the goal was changed afterwards (up_to_pr, confidence 0.93)
+```
+
+When Jev did not decide, it says why (`jev: could not decide (low_confidence, up_to_pr, confidence 0.61)` / `jev: not called (no_api_key)`).
 
 ### Log
 

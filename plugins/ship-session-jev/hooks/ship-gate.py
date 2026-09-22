@@ -53,6 +53,11 @@ SLASH_COMMANDS = ("/ship-session-jev:ship-session-jev", "/ship-session-jev")
 #: ほかの言語で聞いた場合は、エージェントが ship-goal.sh record で記録する
 GOAL_HEADERS = ("Goal", "Approach", "到達点", "進め方")
 
+#: active になった後に到達点を上書きしてよい header。「進め方」（Approach）は
+#: 実装中の設計の質問にも使われる見出しなので、pending 中（飛んでいる質問が
+#: 到達点の質問しかない間）だけ受け付け、active 中は「到達点」だけを受ける
+ACTIVE_GOAL_HEADERS = ("Goal", "到達点")
+
 #: pending 中でも許可するツール。到達点の確定と、その前でも許される
 #: セッション名のリネームだけを通す
 ALLOWED_WHILE_PENDING = ("AskUserQuestion",)
@@ -114,6 +119,11 @@ def bash_allowed_while_pending(command):
     if "=" in argv0:
         # `FOO=bar script` の env 代入プレフィックス
         return False
+    if not os.path.isabs(argv0):
+        # 相対パスは Bash ツールの cwd で解決されるが、この hook の cwd とは限らない。
+        # 検査した実体と実行される実体がずれるので、絶対パスだけを許す
+        # （SKILL.md が案内する `${CLAUDE_PLUGIN_ROOT}/hooks/…` は上で絶対パスになる）
+        return False
     name = os.path.basename(argv0)
     if name not in ALLOWED_BASH_SCRIPTS:
         return False
@@ -133,13 +143,21 @@ def bash_allowed_while_pending(command):
 
 
 def same_script(candidate, trusted):
-    """candidate が trusted と同じ実体か、中身がバイト単位で同一か。読めなければ False。"""
+    """candidate が trusted と同じ実体か、中身がバイト単位で同一か。読めなければ False。
+
+    通常ファイル同士でサイズが同じときだけ中身を読む（filecmp.cmp）。FIFO や
+    デバイスファイルに同じ名前を付けられても open() で止まらない。
+    """
+    import filecmp
+    import stat
+
     try:
         if os.path.realpath(candidate) == os.path.realpath(trusted):
             return True
-        with open(candidate, "rb") as a, open(trusted, "rb") as b:
-            return a.read() == b.read()
-    except (OSError, ValueError):
+        if not stat.S_ISREG(os.stat(candidate).st_mode):
+            return False
+        return filecmp.cmp(candidate, trusted, shallow=False)
+    except Exception:
         return False
 
 
@@ -254,10 +272,15 @@ def slash_command_args(prompt):
 
 
 def args_digest(args):
-    """依頼文の指紋。同じ文で呼び直していないかを見るためだけに使う（文は残さない）。"""
+    """依頼文の指紋。同じ文で呼び直していないかを見るためだけに使う（文は残さない）。
+
+    空白の違い（末尾の改行・連続空白）で別の文と見なさないよう、空白を畳んでから
+    ハッシュする。スラッシュコマンド経由と Skill ツール経由で同じ文が同じ指紋になる
+    """
     import hashlib
 
-    return hashlib.sha256(str(args or "").encode("utf-8")).hexdigest()[:16]
+    normalized = " ".join(str(args or "").split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def arm_gate(pid, session_id, args, reclassify=False):
@@ -272,9 +295,17 @@ def arm_gate(pid, session_id, args, reclassify=False):
     """
     state = read_state(pid)
     digest = args_digest(args)
-    if state and state.get("session_id") == session_id:
+    # session_id が無い状態（ゲートを張る前に record した）は自分のものと見なす。
+    # PreToolUse / PostToolUse の突き合わせと同じ規則
+    if state and state.get("session_id") in ("", None, session_id):
         jev_before = state.get("jev") if isinstance(state.get("jev"), dict) else {}
-        same_text = jev_before.get("args_digest") == digest
+        # Jev の要約はあるが指紋が無い状態（古い版が書いた）は「同じ文」扱いにして
+        # 合意を消さない。Jev の要約自体が無い状態（record だけで作られた）に
+        # 依頼文付きのコマンドが来たら、それは分類していない新しい文
+        if jev_before:
+            same_text = "args_digest" not in jev_before or jev_before.get("args_digest") == digest
+        else:
+            same_text = False
         new_user_text = reclassify and bool(str(args or "").strip()) and not same_text
         if state.get("phase") == "active":
             # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない ——
@@ -347,14 +378,24 @@ def handle_user_prompt_submit(payload):
         # 張り直さなかった（既に active、または同じ文の打ち直し）。それでも
         # コマンドを打ったユーザーのターンなので、今の状態は伝える
         state = read_state(pid) or {}
-        if state.get("session_id") != session_id:
+        if state.get("session_id") not in ("", None, session_id):
             return
-        if state.get("phase") == "active":
+        goal_script = os.path.join(HOOKS_DIR, "ship-goal.sh")
+        if state.get("phase") == "active" and not args.strip():
+            # 依頼文の無いコマンド。同じ依頼の続きか次の依頼かは hook には分からない
+            context = (
+                "[ship-gate] A goal is already recorded in this session from an earlier "
+                "request: %s. This command came without a request text, so it is unclear "
+                "whether this is the same task. If the user is starting a new request, fix "
+                "its goal first (ask with `AskUserQuestion` header: Goal, or run "
+                '`"%s" record "<goal>"`); if it is the same task, continue.'
+                % (state.get("goal"), goal_script)
+            )
+        elif state.get("phase") == "active":
             context = (
                 "[ship-gate] The goal for this session is already recorded: %s. Do not ask "
                 "about it again; continue from where you are. If the user wants a different "
-                'goal, run `"%s" record "<goal>"`.'
-                % (state.get("goal"), os.path.join(HOOKS_DIR, "ship-goal.sh"))
+                'goal, run `"%s" record "<goal>"`.' % (state.get("goal"), goal_script)
             )
         elif isinstance(state.get("jev"), dict):
             context = prompt_context(state["jev"])
@@ -447,7 +488,7 @@ def handle_pre_tool_use(payload):
     sys.exit(2)
 
 
-def extract_goal(tool_input, tool_response):
+def extract_goal(tool_input, tool_response, headers=GOAL_HEADERS):
     """AskUserQuestion の入出力から、到達点の回答を取り出す。
 
     取り出せなければ None（記録しないだけ。次のツールが再びブロックされ、
@@ -456,7 +497,7 @@ def extract_goal(tool_input, tool_response):
     questions = (tool_input or {}).get("questions") or []
     target = None
     for q in questions:
-        if isinstance(q, dict) and str(q.get("header") or "") in GOAL_HEADERS:
+        if isinstance(q, dict) and str(q.get("header") or "") in headers:
             target = q
             break
     if target is None:
@@ -503,7 +544,8 @@ def handle_post_tool_use(payload):
         return
     if session_id and state.get("session_id") not in ("", None, session_id):
         return
-    goal = extract_goal(payload.get("tool_input"), payload.get("tool_response"))
+    headers = ACTIVE_GOAL_HEADERS if state.get("phase") == "active" else GOAL_HEADERS
+    goal = extract_goal(payload.get("tool_input"), payload.get("tool_response"), headers)
     if not goal:
         return
     # Jev の判定要約（張ったときに書いたもの）は残す。status で経緯が追える

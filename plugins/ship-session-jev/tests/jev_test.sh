@@ -345,6 +345,38 @@ run_prompt "/ship-session-jev:ship-session-jev"
 check "引数の無い打ち直しでは呼び直さない" "$(request_count)" "1"
 check "状態ファイルに依頼文の指紋だけが残る（本文は残らない）" "$(grep -c "add dark mode" "$(STATE_FILE)")" "0"
 [ -n "$(state_field jev.args_digest)" ] && ok "args_digest がある" || ng "args_digest がある"
+# 空白の違いは同じ文（Skill 経由の末尾改行と、スラッシュコマンドの strip 済みの文）
+setup; set_mode "answer:up_to_pr:0.60"
+arm_with "add dark mode
+"
+run_goal record "Up to PR"
+run_prompt "/ship-session-jev:ship-session-jev add   dark mode"
+check "空白・改行だけが違う文は同じ文として扱う（呼び直さない）" "$(request_count)" "1"
+check "同じ文なので goal を消さない" "$(state_field goal)" "Up to PR"
+# 古い版が書いた指紋の無い要約は「同じ文」扱い（合意を消さない）
+setup; set_mode "answer:up_to_pr:0.93"
+mkdir -p "$SANDBOX/.claude/cache/ship-gate-jev"
+printf '{"phase":"active","goal":"Up to PR","session_id":"%s","jev":{"result":"skipped","reason":"no_api_key"}}' "$SID" > "$(STATE_FILE)"
+run_prompt "/ship-session-jev:ship-session-jev $REQUEST_TEXT"
+check "指紋の無い古い状態では張り直さない" "$(state_field goal)" "Up to PR"
+check "指紋の無い古い状態では Jev を呼ばない" "$(request_count)" "0"
+# ゲートを張る前に record しただけの状態（session_id 無し）は、Skill invoke で消さない
+setup; set_mode "answer:unspecified:0.9"
+run_goal record "Up to PR"
+check "先に record した状態には session_id が無い" "$(state_field session_id)" ""
+arm_with "$REQUEST_TEXT"
+check "先に record した到達点を Skill invoke で消さない" "$(state_field goal)" "Up to PR"
+check "その場合 Jev も呼ばない" "$(request_count)" "0"
+run_prompt "/ship-session-jev:ship-session-jev $REQUEST_TEXT"
+check "record だけの状態に依頼文付きのコマンドが来たら、その文を分類する" "$(request_count)" "1"
+check "（unspecified なので pending に戻る）" "$(state_field phase)" "pending"
+# 依頼文の無いコマンドが前の依頼の active に来たら、続きか次かは分からない旨を伝える
+setup; set_mode "answer:issue_only:0.95"
+run_prompt "/ship-session-jev:ship-session-jev remove the legacy API, issue only"
+run_prompt "/ship-session-jev:ship-session-jev"
+check "依頼文の無いコマンドでは張り直さない" "$(state_field goal)" "Issue only"
+printf '%s' "$(prompt_context)" | grep -q "from an earlier request: Issue only" && ok "前の依頼の到達点であることを伝える" || ng "前の依頼の到達点であることを伝える ($(prompt_context))"
+printf '%s' "$(prompt_context)" | grep -q "header: Goal" && ok "新しい依頼なら到達点を決め直すよう案内する" || ng "新しい依頼なら到達点を決め直すよう案内する"
 setup
 printf 'not json' | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" TYPESAFE_API_KEY="$DUMMY_KEY" "$GATE" > "$SANDBOX/out" 2>&1
 check "壊れた UserPromptSubmit 入力でも 0" "$?" "0"
@@ -444,13 +476,31 @@ printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQ
   "$SID" "$QC" '{"answers":{"Color?":"blue"}}' \
   | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
 check "active 中の無関係な質問の回答では goal を変えない" "$(state_field goal)" "Issue only"
+QA='{"questions":[{"question":"Which theming approach?","header":"Approach","options":[],"multiSelect":false}]}'
+printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQuestion","tool_input":%s,"tool_response":%s}' \
+  "$SID" "$QA" '{"answers":{"Which theming approach?":"CSS variables"}}' \
+  | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+check "active 中は Approach（設計の質問にも使う見出し）の回答で goal を変えない" "$(state_field goal)" "Issue only"
+QJ='{"questions":[{"question":"どこまで？","header":"到達点","options":[],"multiSelect":false}]}'
+printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQuestion","tool_input":%s,"tool_response":%s}' \
+  "$SID" "$QJ" '{"answers":{"どこまで？":"マージまで"}}' \
+  | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+check "active 中でも 到達点 の回答は goal を上書きする" "$(state_field goal)" "マージまで"
+setup; set_mode "answer:up_to_pr:0.60"
+arm_with "$REQUEST_TEXT"
+printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQuestion","tool_input":%s,"tool_response":%s}' \
+  "$SID" "$QA" '{"answers":{"Which theming approach?":"Investigate and answer only"}}' \
+  | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+check "pending 中は Approach の回答で開く（元のゲートと同じ）" "$(state_field goal)" "Investigate and answer only"
+run_goal record $'​'
+check "ゼロ幅スペースだけの record は拒否" "$?" "1"
 printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQuestion","tool_input":%s,"tool_response":%s}' \
   "s-someone-else" "$Q" '{"answers":{"How far should I take this?":"Up to merge"}}' \
   | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
-check "別セッションの回答では goal を変えない" "$(state_field goal)" "Issue only"
+check "別セッションの回答では goal を変えない" "$(state_field goal)" "Investigate and answer only"
 run_goal record "   "
 check "空白だけの record は拒否（exit 1）" "$?" "1"
-check "空白だけの record では goal が変わらない" "$(state_field goal)" "Issue only"
+check "空白だけの record では goal が変わらない" "$(state_field goal)" "Investigate and answer only"
 setup; set_mode "answer:up_to_pr:0.60"
 arm_with "$REQUEST_TEXT"
 run_goal record "PR まで"

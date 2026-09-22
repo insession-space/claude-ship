@@ -31,7 +31,7 @@ The outcome of ship-session changes a lot depending on how far it goes: a single
 When this skill is invoked, the hook (`hooks/ship-gate.py`) sends the user's request to Jev as a Choice question with five options (`issue_only` / `implementation` / `up_to_pr` / `up_to_merge` / `unspecified`). If the answer is one of the four goals **and** its confidence is at or above the threshold (default 0.85), the hook records the goal and opens the gate before you do anything. There are two entry points, and the hook covers both:
 
 - **The user typed `/ship-session-jev:ship-session-jev <request>`** (or `/ship-session-jev <request>`) → the `UserPromptSubmit` hook classifies the text after the command and hands you a line starting with `[ship-gate]` as additional context in the same turn. **That line is the answer**; read it before doing anything else. If the user types the command again with a *different* request in the same session, the hook treats it as a new task and classifies it afresh (a previous goal is not carried over); typing the same text again just repeats the current state
-- **You invoked the skill with the `Skill` tool** (the user asked in prose) → the `PreToolUse` hook classifies the `args` you passed. You get no context line in this case
+- **You invoked the skill with the `Skill` tool** (the user asked in prose) → the `PreToolUse` hook classifies the `args` you passed, once per session (a later `Skill` re-invoke does not classify again, whatever its `args`). You get no context line in this case; `status` below is how you read the result
 
 If you did not receive a `[ship-gate]` line, or want to double-check, **run this first, before renaming the session or asking anything**:
 
@@ -40,7 +40,9 @@ If you did not receive a `[ship-gate]` line, or want to double-check, **run this
 ```
 
 - **`[ship-gate] Jev classified this request as goal: …`, or `goal: <label>` with `jev: decided the goal (…)`** → the goal is fixed. **Do not ask.** Tell the user in one line, in their language, which goal Jev chose and that they can change it (e.g. "Jev read this as *Up to PR* (confidence 0.93); say so if you want a different goal"), then go on to Phase 1. If the user changes it, run `ship-goal.sh record "<new goal>"` before continuing
-- **`[ship-gate] Jev did not decide the goal (…)`, or `goal: not decided yet` with `jev: could not decide (…)` / `jev: not called (…)`** → Jev did not decide (no API key, disabled, the request does not state how far to go, low confidence, or the API failed). **Fix the goal yourself exactly as `ship-session` does** — the rest of this Phase
+- **`[ship-gate] The goal for this session is already recorded: …`, or `goal: <label>` with `jev: decided … but the goal was changed afterwards (…)` or no `jev:` line** → the goal is fixed too, but not necessarily by Jev (the user answered, or ran `record`). **Do not ask, and do not attribute it to Jev**; state the goal and continue from where you are
+- **`[ship-gate] Jev did not decide the goal (…)`, or `goal: not decided yet (the gate is armed)` with `jev: could not decide (…)` / `jev: not called (…)`** → Jev did not decide (no API key, disabled, the request does not state how far to go, low confidence, or the API failed). **Fix the goal yourself exactly as `ship-session` does** — the rest of this Phase
+- **`goal: not set (no gate is armed)`** → the hook could not arm the gate at all (it could not resolve the session, or the state directory is not writable). Nothing enforces Phase 0 in this case; fix the goal yourself all the same
 - The reasons are only for you; do not make the user care about them. Jev never touches anything other than this one classification (not verification, not acceptance criteria, not review)
 
 ### Gate: fix the goal before anything else (required)

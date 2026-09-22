@@ -114,8 +114,9 @@ if cmd == "clear":
 
 # record: 既存の session_id は保持する（ゲートの張り主と突き合わせるため）
 goal = " ".join(goal.split())
-if not goal:
-    # 空白だけの到達点でゲートを開けない（bash 側の -z は "   " を通す）
+# 空白だけ・見えない文字（ゼロ幅スペース等）だけの到達点でゲートを開けない
+# （bash 側の -z は "   " を通し、str.split() は U+200B を空白と見ない）
+if not "".join(ch for ch in goal if ch not in "​‌‍⁠﻿"):
     print('usage: ship-goal.sh record "<goal>"', file=sys.stderr)
     sys.exit(1)
 state = read()

@@ -37,6 +37,8 @@ has "frontmatter の name が ship-session-jev" "$SHIP" "^name: ship-session-jev
 has "Step 0（Jev の判定を先に見る）の節がある" "$SHIP" "^### Step 0: check whether Jev already decided"
 has "最初に ship-goal.sh status を実行する旨がある" "$SHIP" 'ship-goal\.sh" status'
 has "Jev が決めていたら質問しない旨がある" "$SHIP" "the goal is fixed\. \*\*Do not ask\.\*\*"
+has "hook が出す 3 つ目のコンテキスト行（already recorded）の扱いがある" "$SHIP" "The goal for this session is already recorded"
+has "Jev 以外が決めた到達点を Jev の判定と言わない旨がある" "$SHIP" "do not attribute it to Jev"
 has "Jev が決めた到達点を 1 行で告げる旨がある" "$SHIP" "Tell the user in one line"
 has "決めていなければ ship-session と同じに進む旨がある" "$SHIP" "Fix the goal yourself exactly as .ship-session. does"
 has "Jev は分類以外に触れない旨がある" "$SHIP" "not verification, not acceptance criteria, not review"
@@ -89,9 +91,20 @@ len="$(printf '%s' "${desc#description: }" | wc -m | tr -d ' ')"
 echo
 echo "hooks: 配布物が揃っている"
 HOOKS="$ROOT/hooks/hooks.json"
-has "UserPromptSubmit で ship-gate.py を呼ぶ（スラッシュコマンドで張る入口）" "$HOOKS" '"UserPromptSubmit"'
-has "PreToolUse で ship-gate.py を呼ぶ" "$HOOKS" '"PreToolUse"'
-has "PostToolUse（AskUserQuestion）で ship-gate.py を呼ぶ" "$HOOKS" '"matcher": "AskUserQuestion"'
+# 各イベントの command が ship-gate.py であることまで見る（キーの存在だけでは、
+# 別のスクリプトに差し替わっても通ってしまう）
+HOOK_CMDS="$(python3 -c 'import json,sys,os
+h=json.load(open(sys.argv[1]))["hooks"]
+out=[]
+for ev in ("UserPromptSubmit","PreToolUse","PostToolUse"):
+    cmds=[x["command"] for g in h.get(ev,[]) for x in g.get("hooks",[])]
+    out.append(ev+"="+",".join(os.path.basename(c) for c in cmds))
+    if ev=="PostToolUse":
+        out.append("matcher="+",".join(g.get("matcher","") for g in h.get(ev,[])))
+print(";".join(out))' "$HOOKS")"
+[ "$HOOK_CMDS" = "UserPromptSubmit=ship-gate.py;PreToolUse=ship-gate.py;PostToolUse=ship-gate.py;matcher=AskUserQuestion" ] \
+  && ok "UserPromptSubmit / PreToolUse / PostToolUse(AskUserQuestion) のいずれも ship-gate.py を呼ぶ" \
+  || ng "UserPromptSubmit / PreToolUse / PostToolUse(AskUserQuestion) のいずれも ship-gate.py を呼ぶ (実際: $HOOK_CMDS)"
 lacks "セッション名の促しは複製しない（ship-session の担当）" "$HOOKS" 'session-name-reminder'
 [ ! -f "$ROOT/hooks/session-name-reminder.py" ] && ok "session-name-reminder.py を同梱していない" || ng "session-name-reminder.py を同梱していない"
 has "ship-gate.py が UserPromptSubmit を処理する" "$ROOT/hooks/ship-gate.py" 'def handle_user_prompt_submit'
@@ -113,14 +126,17 @@ echo
 echo "README: 任意機能であることと設定の在り処"
 for f in README.md README.ja.md; do
   R="$ROOT/$f"
-  has "$f: ship-session が前提である旨" "$R" "ship-session"
+  # 「ship-session」はこのプラグインの名前にも含まれるので、前提として書いた文そのものを見る
+  has "$f: ship-session が前提である旨（両方入れる）" "$R" "install both|両方入れます"
   for v in TYPESAFE_API_KEY SHIP_JEV_ENABLED SHIP_JEV_THRESHOLD SHIP_JEV_TIMEOUT_MS SHIP_JEV_ENDPOINT; do
-    has "$f: $v が説明されている" "$R" "$v"
+    # 設定表の行（| `変数` | 既定 | 意味 |）として書かれていること
+    has "$f: $v が設定表にある" "$R" "^\| \`$v\` \|"
   done
-  has "$f: 既定のしきい値 0.85" "$R" "0\.85"
-  has "$f: 既定のタイムアウト 800" "$R" "800"
+  has "$f: 設定表のしきい値の既定が 0.85" "$R" "^\| \`SHIP_JEV_THRESHOLD\` \| \`0\.85\` \|"
+  has "$f: 設定表のタイムアウトの既定が 800、上限 5000" "$R" "^\| \`SHIP_JEV_TIMEOUT_MS\` \| \`800\` \|.*5000"
   has "$f: ログの場所" "$R" "ship-gate-jev/jev\.log"
-  has "$f: unspecified の説明" "$R" "unspecified"
+  has "$f: unspecified の説明（どれにも当てはまらない受け皿）" "$R" "none of the above|どれにも当てはまらない"
+  has "$f: 質問に倒れる条件の表がある" "$R" "^\| .*(unspecified).*\| (Ask|質問する) \|"
 done
 has "README.md: 任意機能の節がある" "$ROOT/README.md" "^## .*optional"
 has "README.ja.md: 任意機能の節がある" "$ROOT/README.ja.md" "^## .*任意"

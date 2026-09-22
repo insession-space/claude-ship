@@ -105,7 +105,8 @@ Phase 3  次の一手を提示
 | confidence がしきい値未満 | 質問する |
 | 接続失敗・タイムアウト・3xx（リダイレクトは追わない）・401 / 422 / 429 / 5xx / 529 | 質問する（リトライしない） |
 | 本文が JSON でない・`answers.goal` が無い・`choice` / `confidence` の型が違う・`choice` が 5 つの criteria に無い・`confidence` が 0〜1 の外（`NaN` / `Infinity` 含む） | 質問する |
-| 同じ依頼文をもう一度打った、またはエージェントが最初の分類の後にスキルを再 invoke した | Jev を呼び直さず、今の状態を伝える |
+| 同じ依頼文をスラッシュコマンドでもう一度打った | Jev を呼び直さず、今の状態をコンテキストとしてエージェントに繰り返す |
+| 最初の分類の後にエージェントが `Skill` ツールでスキルを再 invoke した | Jev を呼び直さず、何も出さない。エージェントは `ship-goal.sh status` で読む |
 | 同じセッションで **別の依頼文** でスラッシュコマンドを打った | 次の依頼として扱い、Jev を呼び直す。前の到達点は引き継がない |
 
 プロキシ: `https://` のエンドポイントでは環境変数の `https_proxy` / `HTTPS_PROXY` を使います（キーは TLS の中）。macOS のシステムプロキシ設定は読まず、平文の `http://`（ループバック）をプロキシに通すことはありません。
@@ -120,6 +121,15 @@ Jev の判定は普通の到達点の記録と同じ扱いです。「やっぱ�
 goal: Up to PR
 jev: decided the goal (up_to_pr, confidence 0.93)
 ```
+
+上書きした後は、2 行目が経緯を残します。
+
+```
+goal: Issue only
+jev: decided Up to PR but the goal was changed afterwards (up_to_pr, confidence 0.93)
+```
+
+Jev が決めなかったときは理由を出します（`jev: could not decide (low_confidence, up_to_pr, confidence 0.61)` / `jev: not called (no_api_key)`）。
 
 ### ログ
 
