@@ -114,9 +114,11 @@ if cmd == "clear":
 
 # record: 既存の session_id は保持する（ゲートの張り主と突き合わせるため）
 goal = " ".join(goal.split())
-# 空白だけ・見えない文字（ゼロ幅スペース等）だけの到達点でゲートを開けない
-# （bash 側の -z は "   " を通し、str.split() は U+200B を空白と見ない）
-if not "".join(ch for ch in goal if ch not in "​‌‍⁠﻿"):
+# 空白・見えない文字（ゼロ幅スペース・方向制御など Unicode の Z* / C* カテゴリ）
+# だけの到達点でゲートを開けない（bash 側の -z は "   " を通し、str.split() は
+# U+200B を空白と見ない）
+import unicodedata
+if not any(unicodedata.category(ch)[0] not in ("Z", "C") for ch in goal):
     print('usage: ship-goal.sh record "<goal>"', file=sys.stderr)
     sys.exit(1)
 state = read()

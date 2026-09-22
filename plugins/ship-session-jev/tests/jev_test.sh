@@ -494,6 +494,10 @@ printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQ
 check "pending 中は Approach の回答で開く（元のゲートと同じ）" "$(state_field goal)" "Investigate and answer only"
 run_goal record $'​'
 check "ゼロ幅スペースだけの record は拒否" "$?" "1"
+run_goal record $'​ ​'
+check "ゼロ幅スペースと空白だけの record も拒否" "$?" "1"
+run_goal record $'‎'
+check "方向制御文字（LRM）だけの record も拒否" "$?" "1"
 printf '{"hook_event_name":"PostToolUse","session_id":"%s","tool_name":"AskUserQuestion","tool_input":%s,"tool_response":%s}' \
   "s-someone-else" "$Q" '{"answers":{"How far should I take this?":"Up to merge"}}' \
   | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
@@ -501,6 +505,8 @@ check "別セッションの回答では goal を変えない" "$(state_field go
 run_goal record "   "
 check "空白だけの record は拒否（exit 1）" "$?" "1"
 check "空白だけの record では goal が変わらない" "$(state_field goal)" "Investigate and answer only"
+run_goal record $'Up​ to PR'
+check "中にゼロ幅文字を含む普通の到達点は通る" "$?" "0"
 setup; set_mode "answer:up_to_pr:0.60"
 arm_with "$REQUEST_TEXT"
 run_goal record "PR まで"
