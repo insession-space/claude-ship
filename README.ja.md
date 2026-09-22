@@ -20,6 +20,7 @@ Claude Code を再起動すると使えます。
 | プラグイン | 何をするか | ドキュメント |
 | --- | --- | --- |
 | `ship-session` | 要望を GitHub Issue にして、受け入れ条件が全て埋まり・検証が緑・レビュー指摘0件になるまで同じセッションで実装しきる | [plugins/ship-session](plugins/ship-session/README.ja.md) |
+| `ship-session-jev` | `ship-session` のアドオン。Jev（TypeSafe AI）に依頼文から到達点を判定させ、確信が高ければ Phase 0 の質問を省く。任意・フェイルオープンで、`TYPESAFE_API_KEY` が無ければ `ship-session` と同じに動く。`ship-session` が前提 | [plugins/ship-session-jev](plugins/ship-session-jev/README.ja.md) |
 | `graph-workflow` | タスクをノード/エッジのグラフに分解し、Workflow ツールで決定的に並列実行する（設計→承認→実行→resume） | [plugins/graph-workflow](plugins/graph-workflow/README.ja.md) |
 
 ## リポジトリ構成

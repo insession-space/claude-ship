@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "ship-session-jev",
+  "version": "0.1.0",
+  "description": "An add-on to ship-session that lets Jev (TypeSafe AI's System One model) classify the goal (Issue / implementation / PR / merge) from the request and skip the Phase 0 question when its confidence is high. Fully optional and fail-open: without TYPESAFE_API_KEY, or when the API fails, it behaves exactly like ship-session. Requires the ship-session plugin.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "github",
+    "issue",
+    "hooks",
+    "typesafe",
+    "jev",
+    "intent-classification"
+  ],
+  "skills": [
+    "./"
+  ]
+}
