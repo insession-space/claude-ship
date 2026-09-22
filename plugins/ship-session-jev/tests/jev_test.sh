@@ -75,13 +75,16 @@ print(json.dumps(cur, ensure_ascii=False, sort_keys=True) if not isinstance(cur,
 }
 
 # 既定の環境（キーあり・モックに向ける）で PreToolUse を投げる。
-# $1=tool_name $2=tool_input(JSON)、以降は env の上書き（KEY=VALUE）
+# $1=tool_name $2=tool_input(JSON)、以降は env の上書き（KEY=VALUE。後勝ち）
+# タイムアウトは長めに固定する。時間が主題の検査は自分で SHIP_JEV_TIMEOUT_MS を渡す
+# （マシンが重いと 800ms の既定に引っかかり、無関係な検査が揺れる）
+SLOW_OK="SHIP_JEV_TIMEOUT_MS=5000"
 run_pre() {
   local tool="$1" input="$2"; shift 2
   printf '{"hook_event_name":"PreToolUse","session_id":"%s","tool_name":"%s","tool_input":%s}' \
     "$SID" "$tool" "$input" \
     | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" \
-      TYPESAFE_API_KEY="$DUMMY_KEY" SHIP_JEV_ENDPOINT="$ENDPOINT" "$@" \
+      TYPESAFE_API_KEY="$DUMMY_KEY" SHIP_JEV_ENDPOINT="$ENDPOINT" "$SLOW_OK" "$@" \
       "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
 }
 
@@ -91,6 +94,23 @@ arm_with() {
   local input
   input="$(python3 -c 'import json,sys;print(json.dumps({"skill":"ship-session-jev:ship-session-jev","args":sys.argv[1]}, ensure_ascii=False))' "$args")"
   run_pre "Skill" "$input" "$@"
+}
+
+# UserPromptSubmit を投げる。$1=prompt（生の文字列）、以降は env の上書き
+run_prompt() {
+  local prompt="$1"; shift
+  python3 -c 'import json,sys;print(json.dumps({"hook_event_name":"UserPromptSubmit","session_id":sys.argv[1],"prompt":sys.argv[2]}, ensure_ascii=False))' "$SID" "$prompt" \
+    | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" \
+      TYPESAFE_API_KEY="$DUMMY_KEY" SHIP_JEV_ENDPOINT="$ENDPOINT" "$SLOW_OK" "$@" \
+      "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+}
+
+# hook の stdout（additionalContext）を取り出す。無ければ空
+prompt_context() {
+  python3 -c 'import json,sys
+raw=open(sys.argv[1]).read().strip()
+if not raw: print(""); sys.exit(0)
+print(json.loads(raw).get("hookSpecificOutput",{}).get("additionalContext",""))' "$SANDBOX/out" 2>/dev/null
 }
 
 run_goal() {
@@ -174,6 +194,76 @@ run_goal record "Issue only"
 check "ユーザーの言い直しで goal を上書きできる" "$(state_field goal)" "Issue only"
 run_goal status
 grep -q "jev: decided Up to PR but the goal was changed afterwards" "$SANDBOX/out" && ok "status が上書きされた旨を出す" || ng "status が上書きされた旨を出す ($(cat "$SANDBOX/out"))"
+
+echo
+echo "スラッシュコマンド（UserPromptSubmit）でもゲートを張り、Jev が決める"
+setup; set_mode "answer:up_to_pr:0.93"
+run_prompt "/ship-session-jev:ship-session-jev $REQUEST_TEXT"
+check "hook は 0 で返る" "$?" "0"
+check "スラッシュコマンドで active になる（jev: $(state_field jev.result) $(state_field jev.reason)）" "$(state_field phase)" "active"
+check "goal が Up to PR" "$(state_field goal)" "Up to PR"
+check "session_id が記録される" "$(state_field session_id)" "$SID"
+check "state はコマンド名を除いた依頼文" "$(last_request_body_field state)" "$REQUEST_TEXT"
+CTX="$(prompt_context)"
+printf '%s' "$CTX" | grep -q "Jev classified this request as goal: Up to PR" && ok "additionalContext が Jev の到達点を伝える" || ng "additionalContext が Jev の到達点を伝える ($CTX)"
+printf '%s' "$CTX" | grep -q "confidence 0.93" && ok "additionalContext に confidence がある" || ng "additionalContext に confidence がある"
+printf '%s' "$CTX" | grep -q "do not ask" && ok "additionalContext が質問しないよう伝える" || ng "additionalContext が質問しないよう伝える"
+check "additionalContext にキーの値が無い" "$(printf '%s' "$CTX" | grep -c "$DUMMY_KEY")" "0"
+check "additionalContext に依頼文が無い" "$(printf '%s' "$CTX" | grep -c "ZZZREQUESTTEXT")" "0"
+run_pre "Bash" '{"command":"ls"}'; check "active なので Bash が通る" "$?" "0"
+run_prompt "/ship-session-jev:ship-session-jev another request, up to merge"
+check "active 後に再びスラッシュコマンドを打っても張り直さない" "$(state_field goal)" "Up to PR"
+check "active 後は Jev を呼ばない" "$(request_count)" "1"
+[ -z "$(prompt_context)" ] && ok "active 後は additionalContext を出さない" || ng "active 後は additionalContext を出さない"
+setup; set_mode "answer:up_to_pr:0.93"
+run_prompt "/ship-session-jev $REQUEST_TEXT"
+check "短い形 /ship-session-jev でも張る" "$(state_field phase)" "active"
+check "短い形でも state は依頼文だけ" "$(last_request_body_field state)" "$REQUEST_TEXT"
+setup; set_mode "answer:up_to_merge:0.9"
+run_prompt "<command-message>ship-session-jev:ship-session-jev</command-message>
+<command-name>/ship-session-jev:ship-session-jev</command-name>
+<command-args>$REQUEST_TEXT</command-args>"
+check "展開済みの形（command-name / command-args）でも張る" "$(state_field phase)" "active"
+check "展開済みの形でも state は command-args の中身" "$(last_request_body_field state)" "$REQUEST_TEXT"
+setup; set_mode "answer:up_to_pr:0.60"
+run_prompt "/ship-session-jev:ship-session-jev $REQUEST_TEXT"
+check "低 confidence なら pending" "$(state_field phase)" "pending"
+CTX="$(prompt_context)"
+printf '%s' "$CTX" | grep -q "Jev did not decide the goal (low_confidence)" && ok "additionalContext が決めなかった理由を伝える" || ng "additionalContext が決めなかった理由を伝える ($CTX)"
+printf '%s' "$CTX" | grep -q "header: Goal" && ok "additionalContext が header: Goal で聞くよう案内する" || ng "additionalContext が header: Goal で聞くよう案内する"
+run_pre "Bash" '{"command":"ls"}'; check "pending なので Bash はブロック" "$?" "2"
+arm_with "$REQUEST_TEXT"
+check "pending で Jev を試みた後の Skill invoke では呼び直さない" "$(request_count)" "1"
+check "その状態は pending のまま" "$(state_field phase)" "pending"
+check "Jev の判定要約も残る" "$(state_field jev.reason)" "low_confidence"
+setup; set_mode "answer:up_to_pr:0.93"
+run_prompt "/ship-session-jev:ship-session-jev"
+check "引数の無いスラッシュコマンドは pending" "$(state_field phase)" "pending"
+check "引数が無ければリクエストを出さない" "$(request_count)" "0"
+check "理由は no_args" "$(state_field jev.reason)" "no_args"
+printf '%s' "$(prompt_context)" | grep -q "did not decide the goal (no_args)" && ok "additionalContext が no_args を伝える" || ng "additionalContext が no_args を伝える"
+setup; set_mode "answer:up_to_pr:0.93"
+run_prompt "/ship-session-jev:ship-session-jev $REQUEST_TEXT" TYPESAFE_API_KEY=
+check "キーが無くてもスラッシュコマンドでゲートは張る" "$(state_field phase)" "pending"
+printf '%s' "$(prompt_context)" | grep -q "did not decide the goal (no_api_key)" && ok "additionalContext がキー無しを伝える" || ng "additionalContext がキー無しを伝える"
+setup
+run_prompt "please add dark mode, up to PR"
+check "普通の発話では hook は 0" "$?" "0"
+[ ! -f "$(STATE_FILE)" ] && ok "普通の発話ではゲートを張らない" || ng "普通の発話ではゲートを張らない"
+[ -z "$(prompt_context)" ] && ok "普通の発話では何も出さない" || ng "普通の発話では何も出さない"
+check "普通の発話ではリクエストを出さない" "$(request_count)" "0"
+setup
+run_prompt "/ship-session:ship-session $REQUEST_TEXT"
+[ ! -f "$(STATE_FILE)" ] && ok "元の /ship-session:ship-session では張らない" || ng "元の /ship-session:ship-session では張らない"
+check "元のコマンドではリクエストを出さない" "$(request_count)" "0"
+setup
+run_prompt "/ship-session-jev-other $REQUEST_TEXT"
+[ ! -f "$(STATE_FILE)" ] && ok "前方一致だけの別コマンドでは張らない" || ng "前方一致だけの別コマンドでは張らない"
+setup
+printf 'not json' | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" TYPESAFE_API_KEY="$DUMMY_KEY" "$GATE" > "$SANDBOX/out" 2>&1
+check "壊れた UserPromptSubmit 入力でも 0" "$?" "0"
+printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s"}' "$SID" | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" TYPESAFE_API_KEY="$DUMMY_KEY" "$GATE" > "$SANDBOX/out" 2>&1
+check "prompt が無い UserPromptSubmit でも 0" "$?" "0"
 
 echo
 echo "4 つの到達点がそれぞれ正準ラベルに写る"
@@ -276,6 +366,18 @@ check "理由は bad_response:confidence_not_number" "$(state_field jev.reason)"
 setup; set_mode 'json:{"answers":{"goal":{"type":"choice","choice":"up_to_pr","confidence":true,"probabilities":{}}}}'
 arm_with "$REQUEST_TEXT"
 check "confidence が真偽値でも pending" "$(state_field phase)" "pending"
+for bad in NaN Infinity -Infinity 93 -0.1 1.0001; do
+  setup; set_mode "json:{\"answers\":{\"goal\":{\"type\":\"choice\",\"choice\":\"up_to_merge\",\"confidence\":$bad,\"probabilities\":{}}}}"
+  arm_with "$REQUEST_TEXT"
+  check "confidence=$bad は pending（NaN は比較をすり抜けるので明示的に弾く）" "$(state_field phase)" "pending"
+  check "confidence=$bad の理由は confidence_out_of_range" "$(state_field jev.reason)" "bad_response:confidence_out_of_range"
+done
+setup; set_mode 'json:{"answers":{"goal":{"type":"choice","choice":"up_to_pr","confidence":1,"probabilities":{}}}}'
+arm_with "$REQUEST_TEXT"
+check "confidence が整数 1 なら active（境界）" "$(state_field phase)" "active"
+setup; set_mode 'json:{"answers":{"goal":{"type":"choice","choice":"up_to_pr","confidence":0,"probabilities":{}}}}'
+arm_with "$REQUEST_TEXT"
+check "confidence が 0 なら pending（境界）" "$(state_field jev.reason)" "low_confidence"
 setup; set_mode 'json:{"answers":{"goal":{"type":"choice","choice":["up_to_pr"],"confidence":0.99,"probabilities":{}}}}'
 arm_with "$REQUEST_TEXT"
 check "choice が文字列でなければ pending" "$(state_field phase)" "pending"
@@ -326,12 +428,13 @@ check "理由は timeout" "$(state_field jev.reason)" "timeout"
 setup; set_mode "sleep:0.5"
 arm_with "$REQUEST_TEXT" SHIP_JEV_TIMEOUT_MS=100
 check "SHIP_JEV_TIMEOUT_MS=100 なら 0.5 秒の応答を待たない" "$(state_field jev.reason)" "timeout"
-setup; set_mode "sleep:0.2"
-arm_with "$REQUEST_TEXT" SHIP_JEV_TIMEOUT_MS=abc
-check "解釈できないタイムアウトは既定（800ms）に戻り 0.2 秒の応答は間に合う" "$(state_field phase)" "active"
-setup; set_mode "sleep:0.2"
-arm_with "$REQUEST_TEXT" SHIP_JEV_TIMEOUT_MS=0
-check "0 以下のタイムアウトは既定に戻る" "$(state_field phase)" "active"
+# 既定値への戻りは時間に依存させず、関数で見る
+PARSED="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import jev
+print(",".join(str(jev.parse_timeout_ms(v)) for v in ("abc", "0", "-5", "", None, "250")))' "$ROOT/hooks")"
+check "解釈できない / 0 以下のタイムアウトは既定 800 に戻る（250 はそのまま）" "$PARSED" "800,800,800,800,800,250"
+PARSED="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import jev
+print(",".join(str(jev.parse_threshold(v)) for v in ("abc", "1.5", "-0.1", "nan", "inf", "", "0.5", "1", "0")))' "$ROOT/hooks")"
+check "解釈できない / 0〜1 の外 / NaN のしきい値は既定 0.85 に戻る" "$PARSED" "0.85,0.85,0.85,0.85,0.85,0.85,0.5,1.0,0.0"
 
 echo
 echo "秘密と依頼文を漏らさない"
@@ -348,7 +451,7 @@ check "モックの記録にキーの値が無い（一致フラグだけ）" "$
 echo
 echo "jev.py は標準ライブラリだけを使う"
 IMPORTS="$(grep -E '^(import|from) ' "$ROOT/hooks/jev.py" | awk '{print $2}' | cut -d. -f1 | sort -u | tr '\n' ',')"
-check "import 一覧" "$IMPORTS" "json,os,socket,threading,time,urllib,"
+check "import 一覧" "$IMPORTS" "json,math,os,socket,threading,time,urllib,"
 
 echo
 echo "フェイルオープン（Jev が壊れていてもゲートは素通し）"

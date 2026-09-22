@@ -33,13 +33,16 @@ The original `/ship-session:ship-session` keeps working unchanged next to this p
 ## What happens
 
 ```
-Invoke  ──►  PreToolUse hook sends the request to Jev (once, ≤ 800 ms)
+/ship-session-jev:… <request>   ──►  UserPromptSubmit hook   ─┐
+  (you type the command)                                       ├─► the request goes to Jev (once, ≤ 800 ms)
+"ship this with Jev" in prose   ──►  agent calls Skill tool    │
+                                     ──► PreToolUse hook      ─┘
                  │
                  ├─ confident (≥ 0.85) and one of the 4 goals ──► goal recorded, gate open
-                 │
+                 │                                                (slash command: the agent is told so in context)
                  └─ otherwise ──► gate armed as usual
                                        │
-Phase 0  Agent runs ship-goal.sh status ┘
+Phase 0  Agent reads the context line / runs ship-goal.sh status ┘
          goal set?  yes → tell the user in one line, go on
                     no  → ask once (same question as ship-session)
    ↓
@@ -68,7 +71,7 @@ The defaults are constants at the top of `hooks/jev.py`.
 
 ### What is sent
 
-One Choice question, following the [TypeSafe API reference](https://docs.typesafe.ai/api). `state` is the skill's `args` — the text you typed after the command — verbatim.
+One Choice question, following the [TypeSafe API reference](https://docs.typesafe.ai/api). `state` is the text you typed after the slash command (or, when the agent invoked the skill itself, the `args` it passed) — verbatim.
 
 ```json
 {
@@ -130,8 +133,8 @@ The API key, the request body, the response body, and your request text are **ne
 
 ## Living next to ship-session
 
-- The gate hook here reacts only to `ship-session-jev`; `ship-session`'s hook reacts only to `ship-session`. Each keeps its own state directory (`ship-gate-jev/` vs `ship-gate/`), so the two never share or overwrite a decision
-- Session renaming (the `UserPromptSubmit` reminder) stays with `ship-session`; this plugin does not duplicate it
+- The gate hook here reacts only to `ship-session-jev` (the slash command and the `Skill` tool); `ship-session`'s hook reacts only to `ship-session`. Each keeps its own state directory (`ship-gate-jev/` vs `ship-gate/`), so the two never share or overwrite a decision
+- Session renaming (the `UserPromptSubmit` reminder) stays with `ship-session`; this plugin's own `UserPromptSubmit` hook only watches for its slash command and stays silent otherwise
 - This plugin ships no `create-issue` / `issue-loop` / `code-review` of its own. It calls `ship-session:create-issue` and `ship-session:issue-loop`, so without `ship-session` installed the skill stops at Phase 1
 
 ## Tests

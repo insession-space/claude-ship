@@ -33,13 +33,16 @@ TypeSafe の API キーは、Claude Code の hook から見える場所に置き
 ## 何が起きるか
 
 ```
-invoke  ──►  PreToolUse hook が依頼文を Jev に送る（1 回だけ、800ms 以内）
+/ship-session-jev:… <依頼>   ──►  UserPromptSubmit hook  ─┐
+  （コマンドを打つ）                                      ├─► 依頼文を Jev に送る（1 回だけ、800ms 以内）
+散文で「Jev で ship して」    ──►  エージェントが Skill を呼ぶ │
+                                  ──► PreToolUse hook   ─┘
                  │
                  ├─ 確信が高く（0.85 以上）4 ゴールのどれか ──► 到達点を記録、ゲートを開く
-                 │
+                 │                                            （スラッシュコマンドならコンテキストで伝える）
                  └─ それ以外 ──► 従来どおりゲートを張る
                                        │
-Phase 0  エージェントが ship-goal.sh status を実行 ┘
+Phase 0  エージェントがコンテキスト行を読む / ship-goal.sh status を実行 ┘
          到達点あり → 1 行で告げて先へ
          なし       → 1 回だけ聞く（ship-session と同じ質問）
    ↓
@@ -68,7 +71,7 @@ Phase 3  次の一手を提示
 
 ### 何を送るか
 
-[TypeSafe の API リファレンス](https://docs.typesafe.ai/api)に沿った Choice 質問 1 つです。`state` はスキルの `args`（コマンドの後ろに書いた文）そのままです。
+[TypeSafe の API リファレンス](https://docs.typesafe.ai/api)に沿った Choice 質問 1 つです。`state` はスラッシュコマンドの後ろに書いた文（エージェント自身がスキルを呼んだときは、その `args`）そのままです。
 
 ```json
 {
@@ -130,8 +133,8 @@ API キー・リクエスト本文・レスポンス本文・依頼文は、ロ�
 
 ## ship-session との共存
 
-- このプラグインのゲート hook は `ship-session-jev` にだけ反応し、`ship-session` の hook は `ship-session` にだけ反応します。状態ディレクトリも別（`ship-gate-jev/` と `ship-gate/`）なので、互いの判定を共有したり上書きしたりしません
-- セッション名の促し（`UserPromptSubmit`）は `ship-session` の担当のままで、このプラグインには複製していません
+- このプラグインのゲート hook は `ship-session-jev`（スラッシュコマンドと `Skill` ツール）にだけ反応し、`ship-session` の hook は `ship-session` にだけ反応します。状態ディレクトリも別（`ship-gate-jev/` と `ship-gate/`）なので、互いの判定を共有したり上書きしたりしません
+- セッション名の促し（`UserPromptSubmit`）は `ship-session` の担当のままです。このプラグイン自身の `UserPromptSubmit` hook は自分のスラッシュコマンドだけを見て、それ以外では何も出しません
 - `create-issue` / `issue-loop` / `code-review` は同梱していません。`ship-session:create-issue` と `ship-session:issue-loop` を呼ぶので、`ship-session` が入っていないと Phase 1 で止まります
 
 ## テスト

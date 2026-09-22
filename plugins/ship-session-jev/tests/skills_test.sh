@@ -89,9 +89,13 @@ len="$(printf '%s' "${desc#description: }" | wc -m | tr -d ' ')"
 echo
 echo "hooks: 配布物が揃っている"
 HOOKS="$ROOT/hooks/hooks.json"
+has "UserPromptSubmit で ship-gate.py を呼ぶ（スラッシュコマンドで張る入口）" "$HOOKS" '"UserPromptSubmit"'
 has "PreToolUse で ship-gate.py を呼ぶ" "$HOOKS" '"PreToolUse"'
 has "PostToolUse（AskUserQuestion）で ship-gate.py を呼ぶ" "$HOOKS" '"matcher": "AskUserQuestion"'
-lacks "UserPromptSubmit は持たない（セッション名の促しは ship-session の担当）" "$HOOKS" '"UserPromptSubmit"'
+lacks "セッション名の促しは複製しない（ship-session の担当）" "$HOOKS" 'session-name-reminder'
+[ ! -f "$ROOT/hooks/session-name-reminder.py" ] && ok "session-name-reminder.py を同梱していない" || ng "session-name-reminder.py を同梱していない"
+has "ship-gate.py が UserPromptSubmit を処理する" "$ROOT/hooks/ship-gate.py" 'def handle_user_prompt_submit'
+has "スラッシュコマンドの形が定数にある" "$ROOT/hooks/ship-gate.py" '^SLASH_COMMANDS = \("/ship-session-jev:ship-session-jev", "/ship-session-jev"\)$'
 for f in ship-gate.py jev.py ship-goal.sh rename-session.sh; do
   [ -x "$ROOT/hooks/$f" ] && ok "hooks/$f が実行可能" || ng "hooks/$f が実行可能"
 done

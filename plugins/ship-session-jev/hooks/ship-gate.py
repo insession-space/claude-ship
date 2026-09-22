@@ -12,8 +12,13 @@ Jev 分類**を足したもの。ゲートの仕組み自体（pending 中のブ
 
 動き:
 
-- PreToolUse で `Skill(ship-session-jev)` を見たらゲートを張る（pending。
-  Jev が決めたら active）
+- ゲートを張る入口は 2 つ。どちらも張るときに Jev を 1 回だけ呼ぶ
+  - UserPromptSubmit でユーザーの入力が `/ship-session-jev:ship-session-jev <依頼>`
+    （または `/ship-session-jev <依頼>`）なら張る。スラッシュコマンドは Claude Code が
+    プロンプトに展開するだけで `Skill` ツールを通らないので、ここで拾わないと
+    案内している入口で Jev が動かない。結果は additionalContext でエージェントに伝える
+  - PreToolUse で `Skill(ship-session-jev)` を見たら張る（散文で頼まれてエージェントが
+    Skill ツールを呼ぶ経路）
 - pending の間は、到達点の確定に使うツール以外を **exit 2 でブロック** し、
   何をすべきかを stderr でエージェントに返す
 - 到達点は次のどれかで記録され、ゲートが開く（active）
@@ -38,6 +43,9 @@ STATE_DIR = os.path.join(HOME, "cache", "ship-gate-jev")
 #: ゲートを張る対象のスキル名（`plugin:skill` の skill 側）。
 #: `ship-session` には反応しない（そちらは元のプラグインのゲートが受け持つ）
 SHIP_SKILL = "ship-session-jev"
+
+#: ユーザーが直接打つスラッシュコマンド。長い方から照合する
+SLASH_COMMANDS = ("/ship-session-jev:ship-session-jev", "/ship-session-jev")
 
 #: 到達点を聞く質問の header（SKILL.md / skills/_shared/user-language.md と揃える）。
 #: 質問はユーザーの言語で出すので、英語と日本語の両方を持つ。
@@ -187,11 +195,11 @@ def is_ship_skill(tool_input):
     return skill.split(":")[-1] == SHIP_SKILL
 
 
-def classify_with_jev(tool_input, pid):
+def classify_with_jev(args, pid):
     """ゲートを張るときに Jev で到達点を分類する。
 
     戻り値は jev.classify() の dict。**何があっても例外を出さない**（jev.py の
-    読み込み自体に失敗しても素通し）。呼ぶのはここ 1 か所だけで、それ以外の
+    読み込み自体に失敗しても素通し）。呼ぶのは arm_gate() だけで、それ以外の
     ツール呼び出しで HTTP は出さない。
     """
     try:
@@ -199,10 +207,117 @@ def classify_with_jev(tool_input, pid):
             sys.path.insert(0, HOOKS_DIR)
         import jev
 
-        args = (tool_input or {}).get("args")
         return jev.classify(args if isinstance(args, str) else "", pid=pid)
     except Exception:
         return {"result": "fallback", "reason": "error"}
+
+
+def slash_command_args(prompt):
+    """ユーザーの入力がこのスキルのスラッシュコマンドなら、その引数を返す（無ければ ""）。
+
+    スラッシュコマンドでなければ None。生の入力（`/ship-session-jev:… <依頼>`）と、
+    展開済みの形（`<command-name>/ship-session-jev:…</command-name>` +
+    `<command-args>…</command-args>`）の両方を見る。どちらが hook に渡るかは
+    Claude Code の版に依るので、両方に備える
+    """
+    import re
+
+    text = str(prompt or "").lstrip()
+    for cmd in SLASH_COMMANDS:
+        if text == cmd:
+            return ""
+        if text.startswith(cmd) and text[len(cmd)].isspace():
+            return text[len(cmd):].strip()
+    name = re.search(r"<command-name>\s*(/ship-session-jev(?::ship-session-jev)?)\s*</command-name>", text)
+    if name:
+        args = re.search(r"<command-args>(.*?)</command-args>", text, re.S)
+        return args.group(1).strip() if args else ""
+    return None
+
+
+def arm_gate(pid, session_id, args):
+    """ゲートを張る。Jev が決めたら active、決めなければ pending を書く。
+
+    戻り値は Jev の判定要約（dict）。既に同じセッションで active、または pending で
+    Jev を試みた後なら **何もせず None**（合意を消さない。HTTP も張るときの 1 回だけ）。
+    """
+    state = read_state(pid)
+    if state and state.get("session_id") == session_id:
+        if state.get("phase") == "active":
+            # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない
+            return None
+        if state.get("phase") == "pending" and isinstance(state.get("jev"), dict):
+            # スラッシュコマンドで張った後に Skill ツールでも invoke された等。
+            # 分類は済んでいるので呼び直さない
+            return None
+    outcome = classify_with_jev(args, pid)
+    # 状態に残すのは判定の要約だけ（依頼文・本文は残さない）。
+    # `ship-goal.sh status` がこれを読んで、Jev が決めたのか・なぜ決めなかったのかを出す
+    jev_state = {
+        k: outcome[k]
+        for k in ("result", "reason", "choice", "confidence", "goal")
+        if k in outcome
+    }
+    if outcome.get("result") == "recorded" and outcome.get("goal"):
+        write_state(
+            pid,
+            {
+                "phase": "active",
+                "goal": outcome["goal"],
+                "session_id": session_id,
+                "jev": jev_state,
+            },
+        )
+    else:
+        write_state(pid, {"phase": "pending", "session_id": session_id, "jev": jev_state})
+    return jev_state
+
+
+def prompt_context(jev_state):
+    """UserPromptSubmit で張ったとき、エージェントに渡す additionalContext。
+
+    読むのはエージェントなので英語。到達点はユーザーの言語に訳して告げさせる
+    """
+    goal_script = os.path.join(HOOKS_DIR, "ship-goal.sh")
+    if jev_state.get("result") == "recorded":
+        return (
+            "[ship-gate] Jev classified this request as goal: %s (choice %s, confidence %.2f). "
+            "The Phase 0 gate is already open; do not ask about the goal. Tell the user in one "
+            "line, in their language, that Jev chose this goal and that they can change it, then "
+            "continue with Phase 1. If the user changes it, run `\"%s\" record \"<goal>\"`."
+            % (jev_state.get("goal"), jev_state.get("choice"), float(jev_state.get("confidence") or 0), goal_script)
+        )
+    reason = jev_state.get("reason") or jev_state.get("result") or "unknown"
+    return (
+        "[ship-gate] Jev did not decide the goal (%s). The Phase 0 gate is armed: before any other "
+        "tool, fix the goal — run `\"%s\" record \"<goal>\"` if the message states it, otherwise ask "
+        "with `AskUserQuestion` (header: Goal) in the user's language." % (reason, goal_script)
+    )
+
+
+def handle_user_prompt_submit(payload):
+    """ユーザーがスラッシュコマンドで invoke したときにゲートを張る。それ以外は何も出さない。"""
+    args = slash_command_args(payload.get("prompt"))
+    if args is None:
+        return
+    session_id = str(payload.get("session_id") or "")
+    pid = resolve_pid(session_id)
+    if not pid:
+        return
+    jev_state = arm_gate(pid, session_id, args)
+    if jev_state is None:
+        return
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": prompt_context(jev_state),
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def allowed_while_pending(tool_name, tool_input):
@@ -254,31 +369,8 @@ def handle_pre_tool_use(payload):
         pid = resolve_pid(session_id)
         if not pid:
             return
-        state = read_state(pid)
-        if state and state.get("session_id") == session_id and state.get("phase") == "active":
-            # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない
-            # （Jev も呼ばない。HTTP はゲートを張る 1 回だけ）
-            return
-        outcome = classify_with_jev(tool_input, pid)
-        # 状態に残すのは判定の要約だけ（依頼文・本文は残さない）。
-        # `ship-goal.sh status` がこれを読んで、Jev が決めたのか・なぜ決めなかったのかを出す
-        jev_state = {
-            k: outcome[k]
-            for k in ("result", "reason", "choice", "confidence", "goal")
-            if k in outcome
-        }
-        if outcome.get("result") == "recorded" and outcome.get("goal"):
-            write_state(
-                pid,
-                {
-                    "phase": "active",
-                    "goal": outcome["goal"],
-                    "session_id": session_id,
-                    "jev": jev_state,
-                },
-            )
-            return
-        write_state(pid, {"phase": "pending", "session_id": session_id, "jev": jev_state})
+        args = (tool_input or {}).get("args")
+        arm_gate(pid, session_id, args if isinstance(args, str) else "")
         return
 
     pid = resolve_pid(session_id)
@@ -373,6 +465,8 @@ def main():
         handle_pre_tool_use(payload)
     elif event == "PostToolUse":
         handle_post_tool_use(payload)
+    elif event == "UserPromptSubmit":
+        handle_user_prompt_submit(payload)
 
 
 if __name__ == "__main__":

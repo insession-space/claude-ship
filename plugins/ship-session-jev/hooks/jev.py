@@ -22,6 +22,7 @@ API の形は公式リファレンス（https://docs.typesafe.ai/api）に合わ
 """
 
 import json
+import math
 import os
 import socket
 import threading
@@ -238,6 +239,10 @@ def interpret(body, threshold):
     if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
         return {"result": "fallback", "reason": "bad_response:confidence_not_number"}
     confidence = float(confidence)
+    # json.loads は NaN / Infinity を通す。NaN はどんな比較も False なので
+    # `confidence < threshold` をすり抜けて記録側に落ちる。0〜1 の外も同じ扱い
+    if not math.isfinite(confidence) or not (0.0 <= confidence <= 1.0):
+        return {"result": "fallback", "reason": "bad_response:confidence_out_of_range"}
     if choice not in CRITERIA:
         return {"result": "fallback", "reason": "bad_response:unknown_choice"}
     outcome = {"choice": choice, "confidence": confidence}
