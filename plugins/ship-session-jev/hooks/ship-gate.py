@@ -118,17 +118,29 @@ def bash_allowed_while_pending(command):
     if name not in ALLOWED_BASH_SCRIPTS:
         return False
     # 同名の別スクリプト（`./ship-goal.sh` やチェックアウト内の偽物）を通さない。
-    # このプラグインの hooks/ にある実体そのものだけを許す
-    try:
-        if os.path.realpath(argv0) != os.path.realpath(os.path.join(HOOKS_DIR, name)):
-            return False
-    except (OSError, ValueError):
+    # このプラグインの hooks/ にある実体そのもの、または **中身が同一のもの** だけを
+    # 許す。後者は ship-session プラグイン側の rename-session.sh のため —— セッション名の
+    # 促しは ship-session の hook が出し、案内するパスもそちらの実体なので、パスだけで
+    # 見ると両方入れたときに pending 中のリネームがブロックされる。中身が同じなら
+    # 同じスクリプトで、別物を通す穴にはならない
+    if not same_script(argv0, os.path.join(HOOKS_DIR, name)):
         return False
     allowed_args = ALLOWED_BASH_SCRIPTS[name]
     if allowed_args is not None:
         if len(words) < 2 or words[1] not in allowed_args:
             return False
     return True
+
+
+def same_script(candidate, trusted):
+    """candidate が trusted と同じ実体か、中身がバイト単位で同一か。読めなければ False。"""
+    try:
+        if os.path.realpath(candidate) == os.path.realpath(trusted):
+            return True
+        with open(candidate, "rb") as a, open(trusted, "rb") as b:
+            return a.read() == b.read()
+    except (OSError, ValueError):
+        return False
 
 
 def resolve_pid(session_id):
@@ -228,28 +240,53 @@ def slash_command_args(prompt):
             return ""
         if text.startswith(cmd) and text[len(cmd)].isspace():
             return text[len(cmd):].strip()
-    name = re.search(r"<command-name>\s*(/ship-session-jev(?::ship-session-jev)?)\s*</command-name>", text)
+    # 展開済みの形は **先頭で** 照合する。文中に現れただけ（貼り付けた transcript に
+    # ついての質問など）で張ると、スキルを呼んでいないセッションを止めてしまう
+    name = re.match(
+        r"(?:<command-message>[^<]*</command-message>\s*)?"
+        r"<command-name>\s*(/ship-session-jev(?::ship-session-jev)?)\s*</command-name>",
+        text,
+    )
     if name:
-        args = re.search(r"<command-args>(.*?)</command-args>", text, re.S)
+        args = re.search(r"<command-args>(.*?)</command-args>", text[name.end():], re.S)
         return args.group(1).strip() if args else ""
     return None
 
 
-def arm_gate(pid, session_id, args):
+def args_digest(args):
+    """依頼文の指紋。同じ文で呼び直していないかを見るためだけに使う（文は残さない）。"""
+    import hashlib
+
+    return hashlib.sha256(str(args or "").encode("utf-8")).hexdigest()[:16]
+
+
+def arm_gate(pid, session_id, args, reclassify=False):
     """ゲートを張る。Jev が決めたら active、決めなければ pending を書く。
 
-    戻り値は Jev の判定要約（dict）。既に同じセッションで active、または pending で
-    Jev を試みた後なら **何もせず None**（合意を消さない。HTTP も張るときの 1 回だけ）。
+    戻り値は Jev の判定要約（dict）。既に同じセッションで active なら **何もせず
+    None**（合意を消さない）。pending で Jev を試みた後も原則 None（HTTP は張る
+    ときの 1 回だけ）。例外は reclassify=True（ユーザー自身の入力）で **依頼文が前と
+    違う** とき —— 「到達点が書かれていない」と判定された後にユーザーが言い直した
+    場面で、言い直しを分類し直す。Skill ツール経由（エージェントの言い換え）では
+    分類し直さない（エージェントの文で到達点が決まるのを避ける）。
     """
     state = read_state(pid)
+    digest = args_digest(args)
     if state and state.get("session_id") == session_id:
+        jev_before = state.get("jev") if isinstance(state.get("jev"), dict) else {}
+        same_text = jev_before.get("args_digest") == digest
+        new_user_text = reclassify and bool(str(args or "").strip()) and not same_text
         if state.get("phase") == "active":
-            # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない
-            return None
-        if state.get("phase") == "pending" and isinstance(state.get("jev"), dict):
-            # スラッシュコマンドで張った後に Skill ツールでも invoke された等。
-            # 分類は済んでいるので呼び直さない
-            return None
+            # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない ——
+            # ただしユーザー自身が **別の文** でコマンドを打ち直したなら、それは次の
+            # 依頼。前の依頼の到達点を引き継ぐと「Issue だけ」の依頼で PR まで行く
+            if not new_user_text:
+                return None
+        elif state.get("phase") == "pending" and jev_before:
+            if not new_user_text:
+                # スラッシュコマンドで張った後に Skill ツールでも invoke された等。
+                # 分類は済んでいるので呼び直さない
+                return None
     outcome = classify_with_jev(args, pid)
     # 状態に残すのは判定の要約だけ（依頼文・本文は残さない）。
     # `ship-goal.sh status` がこれを読んで、Jev が決めたのか・なぜ決めなかったのかを出す
@@ -258,6 +295,7 @@ def arm_gate(pid, session_id, args):
         for k in ("result", "reason", "choice", "confidence", "goal")
         if k in outcome
     }
+    jev_state["args_digest"] = digest
     if outcome.get("result") == "recorded" and outcome.get("goal"):
         write_state(
             pid,
@@ -304,15 +342,32 @@ def handle_user_prompt_submit(payload):
     pid = resolve_pid(session_id)
     if not pid:
         return
-    jev_state = arm_gate(pid, session_id, args)
+    jev_state = arm_gate(pid, session_id, args, reclassify=True)
     if jev_state is None:
-        return
+        # 張り直さなかった（既に active、または同じ文の打ち直し）。それでも
+        # コマンドを打ったユーザーのターンなので、今の状態は伝える
+        state = read_state(pid) or {}
+        if state.get("session_id") != session_id:
+            return
+        if state.get("phase") == "active":
+            context = (
+                "[ship-gate] The goal for this session is already recorded: %s. Do not ask "
+                "about it again; continue from where you are. If the user wants a different "
+                'goal, run `"%s" record "<goal>"`.'
+                % (state.get("goal"), os.path.join(HOOKS_DIR, "ship-goal.sh"))
+            )
+        elif isinstance(state.get("jev"), dict):
+            context = prompt_context(state["jev"])
+        else:
+            return
+    else:
+        context = prompt_context(jev_state)
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
-                    "additionalContext": prompt_context(jev_state),
+                    "additionalContext": context,
                 }
             },
             ensure_ascii=False,
@@ -441,7 +496,10 @@ def handle_post_tool_use(payload):
     if not pid:
         return
     state = read_state(pid)
-    if not state or state.get("phase") != "pending":
+    # 元のゲートは pending のときだけ記録する。ここでは active でも記録する —— Jev が
+    # 開けたゲートの上で到達点の質問がされたなら、その回答が Jev の判定を上書きする
+    # のが正しい（header は Goal / Approach に限るので、無関係な回答では動かない）
+    if not state or state.get("phase") not in ("pending", "active"):
         return
     if session_id and state.get("session_id") not in ("", None, session_id):
         return

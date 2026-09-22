@@ -44,6 +44,10 @@ DEFAULT_MODEL = "jev-latest"
 DEFAULT_THRESHOLD = 0.85
 #: 壁時計での上限。ゲート判定を遅くしないために短くする
 DEFAULT_TIMEOUT_MS = 800
+#: 環境変数で伸ばせる上限。hooks.json の hook timeout（10 秒）より十分短くする ——
+#: それを超えると Claude Code が hook ごと殺し、状態を書く前に終わってゲートが
+#: 張られない
+MAX_TIMEOUT_MS = 5000
 
 ENV_API_KEY = "TYPESAFE_API_KEY"
 ENV_ENABLED = "SHIP_JEV_ENABLED"
@@ -94,14 +98,14 @@ def parse_threshold(value):
 
 
 def parse_timeout_ms(value):
-    """タイムアウトの環境変数を読む。解釈できない / 0 以下なら既定に戻す。"""
+    """タイムアウトの環境変数を読む。解釈できない / 0 以下なら既定、上限を超えたら上限。"""
     try:
         timeout_ms = int(str(value).strip())
     except (TypeError, ValueError):
         return DEFAULT_TIMEOUT_MS
     if timeout_ms <= 0:
         return DEFAULT_TIMEOUT_MS
-    return timeout_ms
+    return min(timeout_ms, MAX_TIMEOUT_MS)
 
 
 def settings(env=None):
@@ -156,7 +160,18 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect)
+def build_opener(endpoint):
+    """エンドポイントに応じた opener。
+
+    プロキシは **https のときだけ、環境変数のものだけ** 使う（CONNECT の中は TLS
+    なのでキーは見えない）。http（ループバック）は決してプロキシに通さない ——
+    urllib の既定はここでも `http_proxy` や macOS のシステム設定を拾い、平文の
+    Authorization をプロキシへ送ってしまう。macOS のシステム設定は読まない
+    （遅い上に、ユーザーが hook の挙動を env から推測できなくなる）。
+    """
+    scheme = urllib.parse.urlsplit(endpoint).scheme
+    proxies = urllib.request.getproxies_environment() if scheme == "https" else {}
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler(proxies))
 
 
 def post(endpoint, api_key, payload, timeout_s):
@@ -172,7 +187,7 @@ def post(endpoint, api_key, payload, timeout_s):
             "Accept": "application/json",
         },
     )
-    with _OPENER.open(req, timeout=timeout_s) as resp:
+    with build_opener(endpoint).open(req, timeout=timeout_s) as resp:
         return resp.status, resp.read().decode("utf-8", "replace")
 
 

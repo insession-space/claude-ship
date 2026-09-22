@@ -10,6 +10,9 @@
     raw:<text>                     200 + そのままの本文（JSON でない本文の検査用）
     json:<json>                    200 + その JSON（形が違う本文の検査用）
     sleep:<秒>                     その秒数黙ってから answer:up_to_pr:0.99
+    drip:<秒>                      ヘッダーを返した後、0.3 秒おきに 1 バイトずつ本文を流し続けて
+                                   その秒数かけて answer:up_to_pr:0.99 を完成させる
+                                   （ソケットの timeout は切れず、壁時計の join だけが打ち切れる）
     redirect:<URL>                 302 + Location: <URL>（リダイレクトを追わないことの検査用）
 - 受け取ったリクエストは `<制御ディレクトリ>/requests.log` に 1 行 1 JSON で残す。
   **Authorization ヘッダーの値そのものは書かない。** 期待するキー
@@ -71,6 +74,9 @@ class Handler(BaseHTTPRequestHandler):
         kind, _, arg = mode.partition(":")
         status, payload = 200, ""
         location = None
+        if kind == "drip":
+            self.drip(float(arg))
+            return
         if kind == "redirect":
             status, location = 302, arg
             payload = json.dumps({"moved": arg})
@@ -98,6 +104,23 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         except (BrokenPipeError, ConnectionResetError):
             # hook 側がタイムアウトで先に切った。テストとしては想定内
+            pass
+
+    def drip(self, seconds, step=0.3):
+        """本文を少しずつ流す。JSON の前の空白なので、完走すれば正しい応答になる。"""
+        body = json.dumps(answer_body("up_to_pr", 0.99)).encode("utf-8")
+        n = max(1, int(seconds / step))
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(n + len(body)))
+            self.end_headers()
+            for _ in range(n):
+                self.wfile.write(b" ")
+                self.wfile.flush()
+                time.sleep(step)
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
             pass
 
 

@@ -114,6 +114,10 @@ if cmd == "clear":
 
 # record: 既存の session_id は保持する（ゲートの張り主と突き合わせるため）
 goal = " ".join(goal.split())
+if not goal:
+    # 空白だけの到達点でゲートを開けない（bash 側の -z は "   " を通す）
+    print('usage: ship-goal.sh record "<goal>"', file=sys.stderr)
+    sys.exit(1)
 state = read()
 state.update({"phase": "active", "goal": goal})
 try:

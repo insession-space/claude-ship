@@ -64,7 +64,7 @@ Everything is read from environment variables by the hook (`hooks/jev.py`). Clau
 | `TYPESAFE_API_KEY` | — | **Required to enable.** Absent or empty → Jev is never called |
 | `SHIP_JEV_ENABLED` | `1` | Set to `0` / `false` / `no` / `off` to switch Jev off while keeping the key |
 | `SHIP_JEV_THRESHOLD` | `0.85` | Minimum confidence to record the goal without asking. Values outside 0–1 or unparsable fall back to the default |
-| `SHIP_JEV_TIMEOUT_MS` | `800` | Wall-clock budget for the whole request. On timeout the hook gives up and the usual question is asked |
+| `SHIP_JEV_TIMEOUT_MS` | `800` | Wall-clock budget for the whole request, capped at `5000` (the hook itself is killed by Claude Code at 10 s). On timeout the hook gives up and the usual question is asked |
 | `SHIP_JEV_ENDPOINT` | `https://api.typesafe.ai/v1/systemone` | Override for proxies or tests |
 
 The defaults are constants at the top of `hooks/jev.py`.
@@ -104,14 +104,17 @@ The four goals map 1:1 to `ship-session`'s canonical labels (`Issue only` / `Imp
 | `unspecified` is the answer | Ask |
 | Confidence below the threshold | Ask |
 | Connection error, timeout, 3xx (redirects are never followed), 401 / 422 / 429 / 5xx / 529 | Ask (no retry) |
-| Body is not JSON, has no `answers.goal`, or `choice` / `confidence` have the wrong type | Ask |
-| The gate is already open for this session (re-invoke) | Jev is not called again |
+| Body is not JSON, has no `answers.goal`, `choice` / `confidence` have the wrong type, `choice` is not one of the five criteria, or `confidence` is outside 0–1 (including `NaN` / `Infinity`) | Ask |
+| The same request text is submitted again, or the agent re-invokes the skill after the first classification | Jev is not called again; the current state is reported |
+| The user types the slash command again with a *different* request in the same session | Treated as a new task: Jev is called again and the previous goal is not carried over |
+
+Proxies: for `https://` endpoints the hook honours `https_proxy` / `HTTPS_PROXY` from the environment (the key travels inside TLS). It never reads macOS system proxy settings, and never sends a plain `http://` (loopback) request through a proxy.
 
 The hook itself keeps `ship-session`'s fail-open rule: if anything in it breaks, the tool call passes through.
 
 ### Changing what Jev decided
 
-Jev's decision is a normal goal record. Say "actually, Issue only" and the agent runs `hooks/ship-goal.sh record "Issue only"`, exactly as it would after a manual decision. `hooks/ship-goal.sh status` shows both the current goal and what Jev said:
+Jev's decision is a normal goal record. Say "actually, Issue only" and the agent runs `hooks/ship-goal.sh record "Issue only"`, exactly as it would after a manual decision; if the agent asks the goal question anyway, your answer overrides Jev's record too. `hooks/ship-goal.sh status` shows both the current goal and what Jev said:
 
 ```
 goal: Up to PR

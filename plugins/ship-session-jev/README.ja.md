@@ -64,7 +64,7 @@ Phase 3  次の一手を提示
 | `TYPESAFE_API_KEY` | — | **これが無いと機能ごと無効。** 未設定・空なら Jev を呼ばない |
 | `SHIP_JEV_ENABLED` | `1` | `0` / `false` / `no` / `off` で、キーを残したまま Jev を止める |
 | `SHIP_JEV_THRESHOLD` | `0.85` | 質問せずに記録する confidence の下限。0〜1 の外や解釈できない値は既定に戻る |
-| `SHIP_JEV_TIMEOUT_MS` | `800` | リクエスト全体の壁時計の上限。超えたら諦めて従来の質問に倒れる |
+| `SHIP_JEV_TIMEOUT_MS` | `800` | リクエスト全体の壁時計の上限。`5000` で頭打ち（hook 自体は 10 秒で Claude Code に殺される）。超えたら諦めて従来の質問に倒れる |
 | `SHIP_JEV_ENDPOINT` | `https://api.typesafe.ai/v1/systemone` | プロキシやテスト向けの差し替え |
 
 既定値は `hooks/jev.py` 冒頭の定数です。
@@ -104,14 +104,17 @@ Phase 3  次の一手を提示
 | 答えが `unspecified` | 質問する |
 | confidence がしきい値未満 | 質問する |
 | 接続失敗・タイムアウト・3xx（リダイレクトは追わない）・401 / 422 / 429 / 5xx / 529 | 質問する（リトライしない） |
-| 本文が JSON でない・`answers.goal` が無い・`choice` / `confidence` の型が違う | 質問する |
-| そのセッションのゲートが既に開いている（再 invoke） | Jev を呼び直さない |
+| 本文が JSON でない・`answers.goal` が無い・`choice` / `confidence` の型が違う・`choice` が 5 つの criteria に無い・`confidence` が 0〜1 の外（`NaN` / `Infinity` 含む） | 質問する |
+| 同じ依頼文をもう一度打った、またはエージェントが最初の分類の後にスキルを再 invoke した | Jev を呼び直さず、今の状態を伝える |
+| 同じセッションで **別の依頼文** でスラッシュコマンドを打った | 次の依頼として扱い、Jev を呼び直す。前の到達点は引き継がない |
+
+プロキシ: `https://` のエンドポイントでは環境変数の `https_proxy` / `HTTPS_PROXY` を使います（キーは TLS の中）。macOS のシステムプロキシ設定は読まず、平文の `http://`（ループバック）をプロキシに通すことはありません。
 
 hook 自体は `ship-session` のフェイルオープン規則をそのまま持っています。hook の中で何かが壊れても、ツール呼び出しは素通しです。
 
 ### Jev の判定を変える
 
-Jev の判定は普通の到達点の記録と同じ扱いです。「やっぱり Issue だけで」と言えば、エージェントが `hooks/ship-goal.sh record "Issue only"` で上書きします。`hooks/ship-goal.sh status` は今の到達点と Jev の判定の両方を出します。
+Jev の判定は普通の到達点の記録と同じ扱いです。「やっぱり Issue だけで」と言えば、エージェントが `hooks/ship-goal.sh record "Issue only"` で上書きします。エージェントが到達点の質問をしてきた場合も、その回答が Jev の記録を上書きします。`hooks/ship-goal.sh status` は今の到達点と Jev の判定の両方を出します。
 
 ```
 goal: Up to PR

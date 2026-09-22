@@ -5,7 +5,7 @@ description: ship-session with Jev (TypeSafe AI's System One model) deciding the
 
 # ship-session-jev — ship-session, with Jev deciding the goal
 
-This is `ship-session` with one difference: **when the request is invoked, a hook asks Jev (TypeSafe AI's System One model) how far the user wants to go, and if Jev is confident, the goal is recorded without asking.** Everything else — creating the Issue, the implementation loop, offering the next step — is delegated to the `ship-session` plugin's skills, which must be installed.
+This is `ship-session` with one difference: **when the request is invoked, a hook asks Jev (TypeSafe AI's System One model) how far the user wants to go, and if Jev is confident, the goal is recorded without asking.** Creating the Issue and the implementation loop are delegated to the `ship-session` plugin's skills, which must be installed; this skill itself handles the goal (Phase 0) and offers the next step (Phase 3).
 
 Ship the user's request in this order.
 
@@ -30,7 +30,7 @@ The outcome of ship-session changes a lot depending on how far it goes: a single
 
 When this skill is invoked, the hook (`hooks/ship-gate.py`) sends the user's request to Jev as a Choice question with five options (`issue_only` / `implementation` / `up_to_pr` / `up_to_merge` / `unspecified`). If the answer is one of the four goals **and** its confidence is at or above the threshold (default 0.85), the hook records the goal and opens the gate before you do anything. There are two entry points, and the hook covers both:
 
-- **The user typed `/ship-session-jev:ship-session-jev <request>`** (or `/ship-session-jev <request>`) → the `UserPromptSubmit` hook classifies the text after the command and hands you a line starting with `[ship-gate]` as additional context in the same turn. **That line is the answer**; read it before doing anything else
+- **The user typed `/ship-session-jev:ship-session-jev <request>`** (or `/ship-session-jev <request>`) → the `UserPromptSubmit` hook classifies the text after the command and hands you a line starting with `[ship-gate]` as additional context in the same turn. **That line is the answer**; read it before doing anything else. If the user types the command again with a *different* request in the same session, the hook treats it as a new task and classifies it afresh (a previous goal is not carried over); typing the same text again just repeats the current state
 - **You invoked the skill with the `Skill` tool** (the user asked in prose) → the `PreToolUse` hook classifies the `args` you passed. You get no context line in this case
 
 If you did not receive a `[ship-gate]` line, or want to double-check, **run this first, before renaming the session or asking anything**:
@@ -75,7 +75,7 @@ The labels, headers, questions, and descriptions in this skill's tables are cano
 
 - 「マージまで」「マージして」「出しきって」, "up to merge", "merge it" → **Up to merge**
 - 「PR まで」「PR 作って」「draft PR まで」, "make a PR", "up to a draft PR" → **Up to PR**
-- 「Issue だけ」「Issue 化して」, "just the Issue" → **Issue only** (in this case using `create-issue` directly is more natural)
+- 「Issue だけ」「Issue 化して」, "just the Issue" → **Issue only** (in this case using `ship-session:create-issue` directly is more natural)
 - Nothing said → **ask**
 
 Even when the goal is explicit and you proceed without asking, **record it with `ship-goal.sh record` first** (the gate does not open without a record). Jev's decision counts as a record; a goal you read from the message yourself does not until you run `record`.

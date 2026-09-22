@@ -87,7 +87,7 @@ echo
 echo "pending 中のブロックと許可"
 setup; arm
 run_pre "Bash" '{"command":"ls"}'; check "Bash(ls) はブロック" "$?" "2"
-grep -q "goal" "$SANDBOX/err" && ok "ブロック文が到達点（goal）に言及する" || ng "ブロック文が到達点（goal）に言及する"
+grep -q "The goal is not decided yet" "$SANDBOX/err" && ok "ブロック文が到達点（goal）未決定を告げる" || ng "ブロック文が到達点（goal）未決定を告げる"
 grep -q "header: Goal" "$SANDBOX/err" && ok "ブロック文が header: Goal で聞くよう案内する" || ng "ブロック文が header: Goal で聞くよう案内する"
 grep -q "another language" "$SANDBOX/err" && ok "ブロック文がほかの言語で聞いたときの record を案内する" || ng "ブロック文がほかの言語で聞いたときの record を案内する"
 grep -q "ship-goal.sh" "$SANDBOX/err" && ok "ブロック文が記録スクリプトのパスを含む" || ng "ブロック文が記録スクリプトのパスを含む"
@@ -96,6 +96,22 @@ run_pre "Agent" '{"prompt":"x"}'; check "Agent もブロック" "$?" "2"
 run_pre "AskUserQuestion" '{"questions":[]}'; check "AskUserQuestion は通る" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$ROOT/hooks/rename-session.sh\\\" \\\"名前\\\"\"}"
 check "rename-session.sh は通る" "$?" "0"
+# セッション名の促しは ship-session 側の hook が出し、案内するパスもそちらの実体。
+# 中身が同一なので pending 中でも通す（両方入れたときにリネームが止まらない）
+SIBLING="$(cd "$ROOT/../ship-session" 2>/dev/null && pwd)"
+if [ -n "$SIBLING" ] && [ -f "$SIBLING/hooks/rename-session.sh" ]; then
+  run_pre "Bash" "{\"command\":\"\\\"$SIBLING/hooks/rename-session.sh\\\" \\\"名前\\\"\"}"
+  check "ship-session 側の rename-session.sh（中身が同一）も通る" "$?" "0"
+  run_pre "Bash" "{\"command\":\"\\\"$SIBLING/hooks/ship-goal.sh\\\" record \\\"PR まで\\\"\"}"
+  check "ship-session 側の ship-goal.sh（中身が違う）は通さない" "$?" "2"
+fi
+TWIN="$(mktemp -d)"
+cp "$ROOT/hooks/rename-session.sh" "$TWIN/rename-session.sh"
+run_pre "Bash" "{\"command\":\"\\\"$TWIN/rename-session.sh\\\" \\\"名前\\\"\"}"
+check "別の場所にあっても中身が同一なら通る" "$?" "0"
+printf '\n# tampered\n' >> "$TWIN/rename-session.sh"
+run_pre "Bash" "{\"command\":\"\\\"$TWIN/rename-session.sh\\\" \\\"名前\\\"\"}"
+check "同名でも中身が違えば拒否" "$?" "2"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"PR作成まで\\\"\"}"
 check "ship-goal.sh は通る" "$?" "0"
 run_pre "Bash" "{\"command\":\"\\\"$GOAL\\\" record \\\"Issue #12 の PR作成まで\\\"\"}"
@@ -230,8 +246,9 @@ printf '{"hook_event_name":"PreToolUse","session_id":"s-other","tool_name":"Bash
 check "別セッションの残骸ではブロックしない" "$?" "0"
 [ ! -f "$(STATE_FILE)" ] && ok "残骸は掃除される" || ng "残骸は掃除される"
 setup
-mkdir -p "$SANDBOX/.claude/cache/ship-gate"
+mkdir -p "$SANDBOX/.claude/cache/ship-gate-jev"
 printf 'not json' > "$(STATE_FILE)"
+[ -f "$(STATE_FILE)" ] && ok "壊れた状態ファイルを実際に置けている" || ng "壊れた状態ファイルを実際に置けている"
 run_pre "Bash" '{"command":"ls"}'; check "壊れた状態ファイルでは素通し" "$?" "0"
 setup
 printf 'not json' | env -u TYPESAFE_API_KEY HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" >/dev/null 2>&1
