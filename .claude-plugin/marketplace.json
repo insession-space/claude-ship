@@ -12,6 +12,11 @@
       "description": "A workflow that turns a request into a GitHub Issue and implements it in the same session until every acceptance criterion is met, verification is green, and the review has zero findings. It decides the goal (Issue / implementation / PR / merge) once before starting and stops there."
     },
     {
+      "name": "ship-session-jev",
+      "source": "./plugins/ship-session-jev",
+      "description": "An add-on to ship-session that lets Jev (TypeSafe AI's System One model) decide the goal from the request and skip the Phase 0 question when its confidence is high. Optional and fail-open: without TYPESAFE_API_KEY, or when the API fails, it behaves exactly like ship-session. Requires ship-session."
+    },
+    {
       "name": "graph-workflow",
       "source": "./plugins/graph-workflow",
       "description": "Breaks a task into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool. It shows the graph design for approval first and resumes midway on failure."
