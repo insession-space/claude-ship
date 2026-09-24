@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "ship-session",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A workflow that turns a request into a GitHub Issue and implements it in the same session until every acceptance criterion is met, verification is green, and the review has zero findings. It decides the goal (Issue / implementation / PR / merge) once before starting and stops there. Questions and reports come in the user's language.",
   "author": {
     "name": "Seiya Kawamura"

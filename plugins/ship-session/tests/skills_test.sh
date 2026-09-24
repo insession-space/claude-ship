@@ -85,6 +85,21 @@ has "予告したまま終わらない節がある" "$SHIP" "^### Do not stop af
 has "同じターン内で Skill 呼び出しまで到達させる旨がある" "$SHIP" "call the .Skill. tool in the same turn"
 has "needs input: / failed: が例外として書かれている" "$SHIP" "returns with .needs input:. / .failed:."
 has "到達点の判定が先である旨がある" "$SHIP" "Check the goal first"
+has "ターンを終えてしまう書き方を名指しで禁じている" "$SHIP" "do not end a turn in any of them"
+has "状況報告は次のツール呼び出しと同じメッセージに書く旨がある" "$SHIP" "same message as the next tool call"
+has "走行中の作業を完了扱いしない旨がある" "$SHIP" "not finished while it is still running"
+
+echo
+echo "issue-loop: 反復の合間で止まらない / 周辺の文脈を読む"
+LOOP="$ROOT/skills/issue-loop/SKILL.md"
+has "反復の合間で止まらない節がある" "$LOOP" "^### Keep the loop running between iterations"
+has "走行中の結果で停止条件を評価しない旨がある" "$LOOP" "Evaluate only on finished results"
+has "チケット本文の外（コメント・関連 PR）も読む旨がある" "$LOOP" "Read around the ticket before acting"
+has "委譲プロンプトで引用の境界をタグで示す旨がある" "$LOOP" "Mark where quoted text starts and ends"
+
+echo
+echo "create-issue: 既存の Issue / PR を先に探す"
+has "既存の Issue / PR を探す節がある" "$ROOT/skills/create-issue/SKILL.md" "Look for existing Issues and PRs"
 
 echo
 echo "委譲先スキル: 完了シグナルは呼び出し元の判定を先に書く"
