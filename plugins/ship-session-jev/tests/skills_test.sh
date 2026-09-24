@@ -67,6 +67,8 @@ has "到達点の質問は header: \"Goal\" で聞く" "$SHIP" 'header: "Goal"'
 has "出荷型でない依頼の節がある" "$SHIP" "^### When the request is not shippable"
 has "委譲先の result: を中間報告として扱う節がある" "$SHIP" "^### Treat a delegate's .result:. as an interim report"
 has "予告したまま終わらない節がある" "$SHIP" "^### Do not stop after announcing the next Phase"
+has "ターンを終えてしまう書き方を名指しで禁じている" "$SHIP" "do not end a turn in any of them"
+has "走行中の作業を完了扱いしない旨がある" "$SHIP" "not finished while it is still running"
 ORDER="$(grep -E '^\| [1-4] \|' "$SHIP" | head -n 4 \
   | awk -F'|' '{gsub(/^ +| +$/, "", $3); gsub(/\*\*/, "", $3); print $3}' | tr '\n' ',')"
 if [ "$ORDER" = "Up to PR (Recommended),Up to merge,Implementation only (no PR),Issue only," ]; then

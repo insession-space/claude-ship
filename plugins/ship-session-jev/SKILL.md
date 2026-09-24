@@ -169,7 +169,7 @@ When you need to ask, use `AskUserQuestion` by default. Offer 2–4 reasonable c
 
 Ask for free-form text in prose only **when you need the value itself** (URL / ID / exact wording) and **when only a human can do it, such as authentication**.
 
-**Think once before asking.** Do not ask about things you can find out yourself, things already decided in the conversation, or things with a conventional default. Ask only when "the answer changes what you do next".
+**Do not ask about** things you can find out yourself, things already decided in the conversation, or things with a conventional default. Ask only when "the answer changes what you do next".
 
 ### Keep secrets out of the conversation
 
@@ -193,6 +193,17 @@ Do not output the **values** of API keys, tokens, or passwords in chat, commit m
 
 - **Right after receiving a delegate's report, your output may start with the next `Skill` call instead of a status explanation.** If an explanation is needed, write it in the same turn as the call. If unsure whether to write it, skip it and call
 - Announcement text is not a substitute for entering the next Phase. **Do not split the declaration and the execution into separate turns**
+
+A message with no tool call in it ends the turn. Besides the announcement above, these endings also stop the work while the agreed goal is still owed — **do not end a turn in any of them**:
+
+1. **A long summary of what was done that closes by naming the next step**, with no tool call, so the next step never starts
+2. **An offer to carry on unless the user prefers otherwise** ("Shall I proceed to the implementation loop?"). The goal was agreed in Phase 0; that agreement is the answer
+3. **A list of decisions for the user when, by your own account, none of them blocks the remaining work.** Put your recommendation in the same message and continue with what does not depend on the answer
+4. **Deciding this is a good place to report** because the turn has been long or a Phase finished. A finished Phase is a milestone, not the goal
+
+Status notes and recommendations are welcome — **put them in the same message as the next tool call**. If you notice yourself inviting the user to redirect you or offering to wait, delete it and do the next thing.
+
+**Work you started is not finished while it is still running.** If a background command, an external CLI run, or a subagent has not returned, wait for its completion notification and use its output before judging a Phase done.
 
 **When this rule does not apply** (stopping is correct):
 
