@@ -133,7 +133,7 @@ Propose, as a follow-up, running the same diff through the CLI again once it is 
 
 If there is at least one finding, share it via an **Artifact**, written in the user's language. Items it must include: the list of detected findings (`file:line`, severity, adopted or not and the reason for dropping), a summary of fixes applied with `--fix`, the effort used, and **whether an external CLI or a fallback was used**.
 
-Build it as the page type named in `../_shared/artifact-templates.md` (`review`).
+Choose its look by `../_shared/artifact-templates.md`: the `review` type when the `artifact-templates` skill is installed, otherwise `artifact-design` alone.
 
 **If you include screenshots**, follow `../_shared/artifact-images.md` for how to embed them (**make them click-to-enlarge before publishing**).
 

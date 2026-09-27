@@ -167,6 +167,10 @@ has "ship-session が対応表を参照している" "$SHIP" 'skills/_shared/art
 for s in $DELEGATES; do
   has "$s: 対応表を参照している" "$ROOT/skills/$s/SKILL.md" '\.\./_shared/artifact-templates\.md'
 done
+# 参照側でも未導入時のフォールバックが読める（artifact-templates を必須にしない）
+for f in "$SHIP" "$ROOT"/skills/{issue-loop,code-review,create-issue}/SKILL.md; do
+  has "${f#"$ROOT"/}: 未導入なら artifact-design だけで作る旨がある" "$f" 'otherwise .artifact-design. alone'
+done
 
 echo
 echo "ユーザーの言語: 共通ファイルに規定がある"
