@@ -83,6 +83,10 @@ Code, commands, file paths, and the completion-signal prefixes `result:` / `need
 
 The rule itself lives in [`skills/_shared/user-language.md`](skills/_shared/user-language.md).
 
+## How completion reports look
+
+Completion-report Artifacts use the page types of the [`artifact-templates`](../artifact-templates/README.md) plugin (`implementation` for shipped work, `review` for review findings, `investigation-report` for Issue decisions). The mapping is in [`skills/_shared/artifact-templates.md`](skills/_shared/artifact-templates.md). Without that plugin, reports are built with the `artifact-design` skill alone.
+
 ## Renaming sessions in your display language
 
 The session names Claude Code generates automatically are **always English kebab-case** (an English example like `fix-login-bug` is embedded in the built-in naming prompt, so specifying a language in `CLAUDE.md` does not change it). When the session list is full of mechanical names, you cannot tell sessions apart. This helps either way: if you work in Japanese, it fixes a list full of English; if you work in English, `Fix the login redirect` is still easier to read than `fix-login-bug`.

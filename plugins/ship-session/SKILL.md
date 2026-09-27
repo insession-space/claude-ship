@@ -214,7 +214,7 @@ Do not settle for prose alone; **by default, publish the result as an Artifact a
 
 **When you do not need one**: when the goal is "Issue only" (the Issue itself is the deliverable, so prose is enough). If a delegate already created an Artifact, do not duplicate it; reference its URL.
 
-Read the `artifact-design` skill before writing the Artifact. Always pass `favicon` (1–2 emoji) and `description` (one sentence).
+Read the `artifact-design` skill before writing the Artifact. Build it as the page type named in `skills/_shared/artifact-templates.md` (`implementation`). Always pass `icon` (one generic word) and `description` (one sentence).
 
 ## Completion signal
 

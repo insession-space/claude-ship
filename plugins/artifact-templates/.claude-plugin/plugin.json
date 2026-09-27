@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "artifact-templates",
+  "version": "0.1.0",
+  "description": "Design templates for Artifacts, picked by purpose: a plan becomes a landing page, a review a technical report, an investigation a report or a dashboard, shipped work an implementation report. One dark-first base and a no-slop list keep pages consistent and not machine-looking. Pages come in the user's language.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": [
+    "artifact",
+    "design",
+    "template",
+    "report",
+    "dashboard"
+  ],
+  "skills": [
+    "./"
+  ]
+}

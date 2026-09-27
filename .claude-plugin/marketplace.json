@@ -20,6 +20,11 @@
       "name": "graph-workflow",
       "source": "./plugins/graph-workflow",
       "description": "Breaks a task into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool. It shows the graph design for approval first and resumes midway on failure."
+    },
+    {
+      "name": "artifact-templates",
+      "source": "./plugins/artifact-templates",
+      "description": "Design templates for Artifacts, picked by purpose: a plan becomes a landing page, a review a technical report, an investigation a report or a dashboard, shipped work an implementation report. One dark-first base and a no-slop list keep pages consistent."
     }
   ]
 }

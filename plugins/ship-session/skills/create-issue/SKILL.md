@@ -190,6 +190,8 @@ If the work involved judgments, investigation, or trade-offs, publish the result
 
 If you **only created one Issue** and no further explanation is needed, skip the Artifact and write it in plain text.
 
+Build the Artifact as the page type named in `../_shared/artifact-templates.md` (`investigation-report`).
+
 **If you include screenshots**, follow `../_shared/artifact-images.md` for how to embed them (**make them click-to-enlarge before publishing**).
 
 ## Completion signal
