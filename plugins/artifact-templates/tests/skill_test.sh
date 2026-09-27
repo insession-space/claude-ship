@@ -122,6 +122,13 @@ has "定型句禁止（日英）" "$DESIGN" "No stock phrases"
 has "見出しに結論を書く" "$DESIGN" "states the conclusion"
 
 echo
+echo "DESIGN.md: 実装完了報告の画像は拡大できる"
+IMPL="$(block skeleton:implementation)"
+for pat in 'showModal' '"Enter"' '" "' 'e.target === box' '"cancel"' 'box.close\(\)' 'from.focus\(\)' 'lightbox-open' 'tabindex="0"' 'max-width: 95vw'; do
+  printf '%s\n' "$IMPL" | grep -qE "$pat" && ok "lightbox: $pat" || ng "lightbox: $pat"
+done
+
+echo
 echo "骨格を組み立てられる"
 TMP="$(mktemp -d)"
 if "$ROOT/tests/build_skeletons.sh" "$TMP" >/dev/null 2>&1; then

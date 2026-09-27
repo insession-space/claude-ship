@@ -46,6 +46,7 @@ Light applies only when the viewer explicitly picks it (`data-theme="light"`). T
 | `--warn` / `--warn-soft` | `#e8c16a` / `#36290f` | `#8a5a00` / `#fcefd2` | Should fix, at risk |
 | `--ok` / `--ok-soft` | `#7fd09a` / `#15301f` | `#1d6b3a` / `#dcf1e3` | Done, passing, healthy |
 | `--neutral-soft` | `#232c38` | `#e6ebf1` | Tint behind a neutral pill |
+| `--overlay` | `rgb(5 8 12 / 0.9)` | `rgb(28 35 48 / 0.85)` | Backdrop behind an enlarged image |
 
 State colors (`crit` / `warn` / `ok`) are semantic and do not count as a second accent. Always pair them with a word (`高` / `Must fix` / `exit 0`), never color alone.
 
@@ -86,6 +87,7 @@ Replace the `/* @base */` line in a skeleton with this block, unchanged.
   --warn: #e8c16a; --warn-soft: #36290f;
   --ok: #7fd09a; --ok-soft: #15301f;
   --neutral-soft: #232c38;
+  --overlay: rgb(5 8 12 / 0.9);
   --font-sans: "IBM Plex Sans JP", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
@@ -99,6 +101,7 @@ Replace the `/* @base */` line in a skeleton with this block, unchanged.
   --warn: #8a5a00; --warn-soft: #fcefd2;
   --ok: #1d6b3a; --ok-soft: #dcf1e3;
   --neutral-soft: #e6ebf1;
+  --overlay: rgb(28 35 48 / 0.85);
 }
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.75 var(--font-sans); }
@@ -434,7 +437,7 @@ Pick this form when the value is in the explanation. Pick the dashboard form whe
 
 **Tone**: a status report. Exit codes and counts, not "everything looks good".
 
-**Layout**: standard 760px column. Before / after in two columns that stack under 640px. For the enlarge behavior, use a lightbox (Esc, backdrop click, and a close button all close it). If the `ship-session` plugin is installed, its `skills/_shared/artifact-images.md` has a reference implementation.
+**Layout**: standard 760px column. Before / after in two columns that stack under 640px. The skeleton includes a lightbox: click or Enter / Space opens the image at up to its natural size, and Esc, a backdrop click, or the close button closes it and returns focus. Keep all three ways to close. With zero images it does nothing. When there is no before / after section, delete the `<dialog>` and its script too.
 
 <!-- skeleton:implementation:start -->
 ```html
@@ -449,6 +452,11 @@ Pick this form when the value is in the explanation. Pick the dashboard form whe
 .shots img { width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 4px; cursor: zoom-in; }
 .shots figcaption { font-size: 12px; color: var(--muted); }
 @media (max-width: 640px) { .shots { grid-template-columns: 1fr; } }
+.lightbox { padding: 0; border: 0; background: transparent; max-width: 100vw; max-height: 100vh; }
+.lightbox::backdrop { background: var(--overlay); }
+.lightbox img { display: block; max-width: 95vw; max-height: 95vh; width: auto; height: auto; object-fit: contain; }
+.lightbox button { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; padding: 4px 12px; font: 500 13px var(--font-sans); color: var(--text); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }
+body.lightbox-open { overflow: hidden; }
 </style>
 <div class="page" lang="{language code}">
   <p class="meta">{Issue #n} · {PR #n} · <code>{branch}</code></p>
@@ -475,8 +483,8 @@ Pick this form when the value is in the explanation. Pick the dashboard form whe
 
   <h2>{Label: before / after}</h2>
   <div class="shots">
-    <figure><img src="{data URI}" alt="{Before: what it shows}"><figcaption>{Label: before}</figcaption></figure>
-    <figure><img src="{data URI}" alt="{After: what it shows}"><figcaption>{Label: after}</figcaption></figure>
+    <figure><img src="{data URI}" alt="{Before: what it shows}" role="button" tabindex="0"><figcaption>{Label: before}</figcaption></figure>
+    <figure><img src="{data URI}" alt="{After: what it shows}" role="button" tabindex="0"><figcaption>{Label: after}</figcaption></figure>
   </div>
 
   <h2>{Label: review}</h2>
@@ -488,5 +496,32 @@ Pick this form when the value is in the explanation. Pick the dashboard form whe
     <tbody><tr><td class="num">1</td><td>{What failed}</td><td>{What was changed}</td></tr></tbody>
   </table></div>
 </div>
+<dialog class="lightbox" aria-label="{Label: enlarged image}"><img alt=""><button type="button">{Label: close}</button></dialog>
+<script>
+(() => {
+  const box = document.querySelector(".lightbox");
+  const big = box.querySelector("img");
+  let from = null;
+  const open = (img) => {
+    from = img; big.src = img.src; big.alt = img.alt;
+    document.body.classList.add("lightbox-open");
+    box.showModal();
+  };
+  const shut = () => {
+    box.close();
+    document.body.classList.remove("lightbox-open");
+    if (from) from.focus();
+  };
+  box.addEventListener("cancel", (e) => { e.preventDefault(); shut(); });
+  box.querySelector("button").addEventListener("click", shut);
+  box.addEventListener("click", (e) => { if (e.target === box) shut(); });
+  document.querySelectorAll(".shots img").forEach((img) => {
+    img.addEventListener("click", () => open(img));
+    img.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(img); }
+    });
+  });
+})();
+</script>
 ```
 <!-- skeleton:implementation:end -->
