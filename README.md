@@ -22,6 +22,7 @@ Restart Claude Code and it is ready to use.
 | `ship-session` | Turns a request into a GitHub Issue and implements it in the same session until every acceptance criterion is met, verification is green, and code review has zero findings | [plugins/ship-session](plugins/ship-session/README.md) |
 | `ship-session-jev` | Add-on to `ship-session`: lets Jev (TypeSafe AI) decide the goal from the request and skip the Phase 0 question when confident. Optional and fail-open; without `TYPESAFE_API_KEY` it behaves like `ship-session`. Requires `ship-session` | [plugins/ship-session-jev](plugins/ship-session-jev/README.md) |
 | `graph-workflow` | Breaks a task down into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool (design → approval → run → resume) | [plugins/graph-workflow](plugins/graph-workflow/README.md) |
+| `artifact-templates` | Picks an Artifact design template by purpose (plan → landing page, review → technical report, investigation → report or dashboard, shipped work → implementation report), with one dark-first base and a no-slop list | [plugins/artifact-templates](plugins/artifact-templates/README.md) |
 
 ## Repository layout
 

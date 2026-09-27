@@ -83,6 +83,10 @@ Phase 0 は SKILL.md の指示だけでなく、**hook が機械的に守りま�
 
 ルールの本体は [`skills/_shared/user-language.md`](skills/_shared/user-language.md) です。
 
+## 完了報告の見た目
+
+完了報告の Artifact は、[`artifact-templates`](../artifact-templates/README.ja.md) プラグインの型で作ります（実装完了報告は `implementation`、レビュー指摘は `review`、Issue の判断まとめは `investigation-report`）。対応表は [`skills/_shared/artifact-templates.md`](skills/_shared/artifact-templates.md) です。プラグインが入っていなければ `artifact-design` スキルだけで作ります。
+
 ## セッション名を表示言語に付け直す
 
 Claude Code が自動で付けるセッション名は **英語の kebab-case 固定**です（`fix-login-bug` のような英語例が本体の命名プロンプトに埋め込まれているため、`CLAUDE.md` で言語を指定しても変わりません）。一覧が機械的な名前で並ぶと見分けがつきません。日本語で作業していれば英語が並ぶ問題として、英語で作業していても `fix-login-bug` より `Fix the login redirect` が読める問題として、どちらにも効きます。

@@ -80,6 +80,12 @@ has "共通ファイル user-language.md を参照している" "$SHIP" 'skills/
 [ -f "$ROOT/skills/_shared/user-language.md" ] && ok "user-language.md が同梱されている" || ng "user-language.md が同梱されている"
 has "共通ファイル artifact-images.md を参照している" "$SHIP" 'skills/_shared/artifact-images\.md'
 [ -f "$ROOT/skills/_shared/artifact-images.md" ] && ok "artifact-images.md が同梱されている" || ng "artifact-images.md が同梱されている"
+has "共通ファイル artifact-templates.md を参照している" "$SHIP" 'skills/_shared/artifact-templates\.md'
+[ -f "$ROOT/skills/_shared/artifact-templates.md" ] && ok "artifact-templates.md が同梱されている" || ng "artifact-templates.md が同梱されている"
+has "未導入なら artifact-design だけで作る旨がある" "$SHIP" 'otherwise .artifact-design. alone'
+# ship-session 本体の対応表と同じ中身（片方だけ直して食い違わないように）
+cmp -s "$ROOT/skills/_shared/artifact-templates.md" "$ROOT/../ship-session/skills/_shared/artifact-templates.md" \
+  && ok "artifact-templates.md が ship-session と同一" || ng "artifact-templates.md が ship-session と同一"
 
 echo
 echo "SKILL.md: description は英語で、英語と日本語のトリガー例を持つ"

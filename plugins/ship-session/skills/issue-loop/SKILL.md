@@ -375,6 +375,8 @@ Share the result as an **Artifact**, written in the user's language (see `../_sh
   - Follow `../_shared/artifact-images.md` for how to embed them (**make them click-to-enlarge before publishing**)
 - If the review was done by a substitute method, how it was done and what could not be read
 
+Choose its look by `../_shared/artifact-templates.md`: the `implementation` type when the `artifact-templates` skill is installed, otherwise `artifact-design` alone.
+
 ## Completion signal
 
 **First, determine whether there is a caller.** That decides how you finish.
