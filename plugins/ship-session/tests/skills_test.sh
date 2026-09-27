@@ -153,7 +153,7 @@ echo
 echo "Artifact の型: 共通ファイルに対応表がある"
 TPL="$ROOT/skills/_shared/artifact-templates.md"
 has "対応表の節がある" "$TPL" "^## Mapping"
-has "ship-session は implementation" "$TPL" '\| .ship-session. completion report \| .implementation. \|'
+has "ship-session は implementation" "$TPL" '\| .ship-session. / .ship-session-jev. completion report \| .implementation. \|'
 has "issue-loop は implementation" "$TPL" '\| .issue-loop. completion report \| .implementation. \|'
 has "code-review は review" "$TPL" '\| .code-review. findings \| .review. \|'
 has "create-issue は investigation-report" "$TPL" '\| .create-issue. summary of decisions \| .investigation-report. \|'

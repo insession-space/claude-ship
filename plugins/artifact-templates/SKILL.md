@@ -15,7 +15,7 @@ Everything addressed to the user, and every string in the page, is in the user's
 - **Decide the language in this order**: (1) Claude Code's `language` setting (`~/.claude/settings.local.json`, then `~/.claude/settings.json`), (2) the language of the user's most recent message, (3) English
 - **In the user's language**: the `<title>`, the body, the `description` parameter, UI strings in the page (labels, pills, `alt`, captions), and questions you ask
 - **Do not translate**: code, commands, paths, identifiers
-- Put the language code on the page wrapper (`lang="ja"`)
+- Put the code of the language you decided on the page wrapper (`lang="ja"` for Japanese, `lang="en"` for English)
 
 ## Step 1: Pick the type
 

@@ -68,7 +68,7 @@ State colors (`crit` / `warn` / `ok`) are semantic and do not count as a second 
 ### Language
 
 The page is written in the user's language. Decide it in this order: (1) Claude Code's `language` setting (`~/.claude/settings.local.json`, then `~/.claude/settings.json`), (2) the language of the user's most recent message, (3) English.
-Set the language code on the wrapper (`<div class="page" lang="ja">`). The placeholder text in the skeletons below is in English only to show the slot; replace all of it.
+Set the code of the language you decided on the wrapper (`<div class="page" lang="ja">` for Japanese, `lang="en"` for English). The placeholder text in the skeletons below is in English only to show the slot; replace all of it.
 Do not translate code, commands, paths, or identifiers.
 
 ### Base CSS
