@@ -88,7 +88,7 @@ for id in $TYPES; do
   printf '%s\n' "$SK" | grep -qx '/\* @base \*/' && ok "$id: Base CSS を差し込む形" || ng "$id: Base CSS を差し込む形"
   printf '%s\n' "$SK" | grep -q '^<title>' && ok "$id: <title> がある" || ng "$id: <title> がある"
   printf '%s\n' "$SK" | grep -q 'fonts.googleapis.com/css2?family=IBM+Plex' && ok "$id: 共通の書体を読み込む" || ng "$id: 共通の書体を読み込む"
-  printf '%s\n' "$SK" | grep -q 'class="page" lang=' && ok "$id: ラッパーに lang がある" || ng "$id: ラッパーに lang がある"
+  printf '%s\n' "$SK" | grep -qE 'class="page[^"]*" lang=' && ok "$id: ラッパーに lang がある" || ng "$id: ラッパーに lang がある"
   # 骨格で色を直書きしない（色はトークン経由）
   printf '%s\n' "$SK" | grep -qE '#[0-9a-fA-F]{3,6}\b' && ng "$id: 色を直書きしていない" || ok "$id: 色を直書きしていない"
 done
@@ -105,7 +105,16 @@ nope "影を使わない" 'box-shadow|text-shadow|drop-shadow'
 nope "中央揃えを使わない" 'text-align: *center'
 nope "英語の定型句が無い" 'seamless|cutting-edge|unlock|empower|leverage|delve'
 nope "日本語の定型句が無い" 'することができ|シームレス|革新的|を実現|いかがでしたか'
-nope "ダッシュの挿入句が無い" ' — '
+nope "全画面高さのブロックが無い" '(^|[ ;{])(min-)?height: *100vh'
+nope "見出しを <br> で割っていない" '<h[1-3][^>]*>[^<]*<br'
+if printf '%s\n' "$ALL" | grep -q '·.*·'; then ng "1行に · は1つまで"; else ok "1行に · は1つまで"; fi
+# 表の全行に罫線を引かない（行の区切りはダッシュボードの table.dense だけ）
+printf '%s\n' "$(block base-css)" | grep -E '^td \{' | grep -q 'border' \
+  && ng "Base CSS の td に罫線が無い" || ok "Base CSS の td に罫線が無い"
+# ダッシュ（em / en）はページにもスキル文書にも使わない
+for f in "$SKILL" "$DESIGN" "$ROOT/README.md" "$ROOT/README.ja.md"; do
+  if grep -qF -e '—' -e '–' "$f"; then ng "${f#"$ROOT"/}: em / en ダッシュが無い"; else ok "${f#"$ROOT"/}: em / en ダッシュが無い"; fi
+done
 if printf '%s\n' "$ALL" | perl -CS -ne 'exit 1 if /[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2705}]/' ; then
   ok "絵文字が無い"
 else
@@ -115,11 +124,34 @@ fi
 echo
 echo "DESIGN.md: slop 禁止リストの中身"
 has "見た目の禁止リストがある" "$DESIGN" "^### Look"
+has "レイアウトの禁止リストがある" "$DESIGN" "^### Layout$"
+has "ラベル・装飾の禁止リストがある" "$DESIGN" "^### Labels and ornaments"
 has "文章の禁止リストがある" "$DESIGN" "^### Writing"
+has "taste-skill を参照元として示している" "$DESIGN" "github.com/Leonxlnx/taste-skill"
+has "split header 禁止" "$DESIGN" "No split header"
+has "均等3カード禁止" "$DESIGN" "No three equal cards"
+has "div で描いた偽スクショ禁止" "$DESIGN" "No UI drawn with divs"
+has "番号付き eyebrow 禁止" "$DESIGN" "never a numbered one"
+has "測っていない綺麗な数字禁止" "$DESIGN" "perfect-looking figures"
 has "グラデーション禁止" "$DESIGN" "No gradients"
 has "絵文字見出し禁止" "$DESIGN" "No emoji"
 has "定型句禁止（日英）" "$DESIGN" "No stock phrases"
 has "見出しに結論を書く" "$DESIGN" "states the conclusion"
+
+echo
+echo "DESIGN.md: plan は LP の形をしている"
+PLAN="$(block skeleton:plan)"
+HERO="$(printf '%s\n' "$PLAN" | awk '/<header class="hero">/,/<\/header>/')"
+printf '%s\n' "$HERO" | grep -q '<h1>' && ok "ヒーローに見出し" || ng "ヒーローに見出し"
+printf '%s\n' "$HERO" | grep -q 'class="cta" href="#decide"' && ok "ヒーローに決定セクションへの CTA" || ng "ヒーローに決定セクションへの CTA"
+printf '%s\n' "$HERO" | grep -q '<img ' && ok "ヒーローに実物のビジュアル（img）" || ng "ヒーローに実物のビジュアル（img）"
+printf '%s\n' "$HERO" | grep -q 'class="meta"' && ng "ヒーローにメタ行を置かない" || ok "ヒーローにメタ行を置かない"
+n="$(printf '%s\n' "$HERO" | grep -cE '<(h1|p|a) ')"; n2="$(printf '%s\n' "$HERO" | grep -c '<h1>')"
+[ $((n + n2)) -le 4 ] && ok "ヒーローの文字要素は4つまで ($((n + n2)))" || ng "ヒーローの文字要素は4つまで ($((n + n2)))"
+printf '%s\n' "$PLAN" | grep -q 'id="decide"' && ok "CTA の着地点がある" || ng "CTA の着地点がある"
+for cls in problem points compare timeline decide; do
+  printf '%s\n' "$PLAN" | grep -q "class=\"$cls\"" && ok "セクションの型: $cls" || ng "セクションの型: $cls"
+done
 
 echo
 echo "DESIGN.md: 実装完了報告の画像は拡大できる"
