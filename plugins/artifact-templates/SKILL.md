@@ -1,9 +1,9 @@
 ---
 name: artifact-templates
-description: Picks a design template for an Artifact by its purpose and builds the page from it — a plan or proposal becomes a landing page, a review becomes a technical report, an investigation becomes a report or a dashboard, shipped work becomes an implementation report. All templates share one dark-first base and a no-slop list, so pages stop looking machine-made. Use when making an Artifact from a plan, review, investigation, status check, or completion report, e.g. "make this proposal an Artifact", "put the review results in a report", "show the status as a dashboard", 「この企画を Artifact にして」「レビュー結果をレポートにして」「調査結果をダッシュボードで見せて」「状況をまとめて」, and when another skill (ship-session, code-review, issue-loop) asks for a template.
+description: Picks a design template for an Artifact by its purpose and builds the page from it: a plan or proposal becomes a landing page, a review becomes a technical report, an investigation becomes a report or a dashboard, shipped work becomes an implementation report. All templates share one dark-first base and a no-slop list, so pages stop looking machine-made. Use when making an Artifact from a plan, review, investigation, status check, or completion report, e.g. "make this proposal an Artifact", "put the review results in a report", "show the status as a dashboard", 「この企画を Artifact にして」「レビュー結果をレポートにして」「調査結果をダッシュボードで見せて」「状況をまとめて」, and when another skill (ship-session, code-review, issue-loop) asks for a template.
 ---
 
-# artifact-templates — pick the page type by purpose
+# artifact-templates: pick the page type by purpose
 
 Pick one of five page types from the context, then build the Artifact from its skeleton in `DESIGN.md`.
 The point is that the same kind of report always looks the same, and that no page looks machine-made.
@@ -55,9 +55,12 @@ Do not read the other type sections.
 Before publishing, go through the No-slop list once, looking and writing both. The checks that catch the most:
 
 - The `h1` states the conclusion, not the topic
-- No gradients, no emoji markers, no shadows on content, no card around every section
-- No stock phrases; numbers, names, and paths instead of adjectives
+- No gradients, no emoji, no shadows on content, no card around every section, no hairline under every row
+- No split header, no three equal cards, no numbered eyebrows, at most one `·` per line
+- No UI drawn with divs to fake a screenshot. A real image or nothing
+- No stock phrases, no em or en dashes, no perfect-looking numbers you did not measure; numbers, names, and paths instead of adjectives
 - The page ends on the next action or the open question, not on a summary
+- For `plan`: the headline, sentence, and button fit in the first screen, and no layout repeats
 
 Pass `description` (one sentence) and `icon` on the first publish, as the Artifact tool requires.
 

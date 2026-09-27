@@ -35,8 +35,8 @@ Pages are written in your language (Claude Code's `language` setting, otherwise 
 
 - **`DESIGN.md` is the single source of truth.** It holds the shared base (tokens, type, layout, Base CSS), the no-slop list, and the five skeletons. Other skills refer to it and never copy it
 - **Dark by default.** Pages are dark whatever the OS setting; light applies only when the viewer picks it (`data-theme="light"`)
-- **A working-document look.** Blue-grey ground, one indigo accent, IBM Plex Sans JP. Rules and spacing, not cards and shadows
-- **No slop.** No gradients, emoji headings, cards around everything, centered text, or stock phrases. Headings state conclusions; numbers and names replace adjectives
+- **A working-document look.** Blue-grey ground, one indigo accent, IBM Plex Sans JP. Spacing, not cards and shadows. `plan` is a real landing page: headline, sentence, and button in the first screen, a real image full-width below
+- **No slop.** Drawing on [taste-skill](https://github.com/Leonxlnx/taste-skill): no gradients, emoji, cards around everything, three equal cards, split headers, hairlines under every row, numbered labels, div-drawn fake screenshots, stock phrases, dashes, or perfect-looking numbers nobody measured. Headings state conclusions; numbers and names replace adjectives
 - **Works with the `artifact-design` skill**, which holds the page contract (CDN, size, theming). This plugin only adds the per-purpose types
 - **No type fits** (games, tools): no template is forced
 
