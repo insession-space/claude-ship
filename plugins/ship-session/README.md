@@ -83,6 +83,17 @@ Code, commands, file paths, and the completion-signal prefixes `result:` / `need
 
 The rule itself lives in [`skills/_shared/user-language.md`](skills/_shared/user-language.md).
 
+### Japanese is written with yomiyasu
+
+When the language is Japanese, Artifact bodies, reports, and Japanese Issue / PR bodies are written following the [yomiyasu](https://github.com/nanaism/yomiyasu) skill: who does what in every sentence, no metaphor verbs, no emoji or bold for emphasis. Code, quotes, signal prefixes, and attribution lines are left as they are. Install it separately:
+
+```bash
+claude plugin marketplace add nanaism/yomiyasu
+claude plugin install yomiyasu@yomiyasu
+```
+
+Without it, a few of its principles are applied directly. Do not enable another Japanese style skill (such as `natural-japanese`) at the same time; yomiyasu warns that they interfere. The rule lives in [`skills/_shared/japanese-writing.md`](skills/_shared/japanese-writing.md).
+
 ## How completion reports look
 
 Completion-report Artifacts use the page types of the [`artifact-templates`](../artifact-templates/README.md) plugin (`implementation` for shipped work, `review` for review findings, `investigation-report` for Issue decisions). The mapping is in [`skills/_shared/artifact-templates.md`](skills/_shared/artifact-templates.md). Without that plugin, reports are built with the `artifact-design` skill alone.
@@ -134,6 +145,7 @@ The following are **used if available**; everything works without them.
 
 - **External review CLI** (`codex` etc.) — if available, review and investigation are delegated to it to save tokens. Otherwise, multiple subagents with separate lenses are used instead (**it never falls back to a single read-through**)
 - **Notion MCP** — if available, Notion pages can also be handled as tickets
+- **[yomiyasu](https://github.com/nanaism/yomiyasu)** — if installed, Japanese prose is written following it (see above)
 
 ### Verification commands are chosen automatically
 

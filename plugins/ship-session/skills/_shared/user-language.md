@@ -21,6 +21,10 @@ The `language` value is free-form: a language name (`日本語`, `Français`) or
 - **Plain-text progress updates and completion reports**
 - **The headline after a completion signal** (see below)
 
+## Japanese prose
+
+When the decided language is Japanese, write Artifact bodies, reports, and Japanese Issue / PR bodies following the `yomiyasu` skill. What it covers, what it leaves alone, and the fallback when it is not installed are in `japanese-writing.md` in the same directory.
+
 ## Do not translate these
 
 - Code, commands, file paths, identifiers, configuration keys, and label names such as `status: todo`

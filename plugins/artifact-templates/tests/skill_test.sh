@@ -197,6 +197,10 @@ has "artifact-design と併用する" "$SKILL" "artifact-design"
 has "ユーザーの言語の節がある" "$SKILL" "^## Use the user's language"
 has "language 設定を最優先で見る" "$SKILL" "Claude Code's .language. setting"
 has "直近の発話の言語に倒す" "$SKILL" "most recent message"
+has "日本語の文章は yomiyasu に沿う" "$SKILL" "Japanese text follows the .*yomiyasu"
+has "日本語の文では yomiyasu を優先する" "$SKILL" "yomiyasu wins"
+has "README（英）に yomiyasu の導入手順がある" "$ROOT/README.md" "claude plugin install yomiyasu@yomiyasu"
+has "README（日）に yomiyasu の導入手順がある" "$ROOT/README.ja.md" "claude plugin install yomiyasu@yomiyasu"
 has "DESIGN.md が正本" "$SKILL" "single source of truth"
 
 echo

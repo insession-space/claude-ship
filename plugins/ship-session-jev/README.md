@@ -149,6 +149,7 @@ The API key, the request body, the response body, and your request text are **ne
 - The gate hook here reacts only to `ship-session-jev` (the slash command and the `Skill` tool); `ship-session`'s hook reacts only to `ship-session`. Each keeps its own state directory (`ship-gate-jev/` vs `ship-gate/`), so the two never share or overwrite a decision
 - Session renaming (the `UserPromptSubmit` reminder) stays with `ship-session`; this plugin's own `UserPromptSubmit` hook only watches for its slash command and stays silent otherwise
 - This plugin ships no `create-issue` / `issue-loop` / `code-review` of its own. It calls `ship-session:create-issue` and `ship-session:issue-loop`, so without `ship-session` installed the skill stops at Phase 1
+- Japanese prose follows the [yomiyasu](https://github.com/nanaism/yomiyasu) skill, the same as `ship-session` (rule: [`skills/_shared/japanese-writing.md`](skills/_shared/japanese-writing.md)). Install it with `claude plugin marketplace add nanaism/yomiyasu` and `claude plugin install yomiyasu@yomiyasu`
 
 ## Tests
 

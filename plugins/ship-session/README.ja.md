@@ -83,6 +83,17 @@ Phase 0 は SKILL.md の指示だけでなく、**hook が機械的に守りま�
 
 ルールの本体は [`skills/_shared/user-language.md`](skills/_shared/user-language.md) です。
 
+### 日本語は yomiyasu に沿って書く
+
+言語が日本語のとき、Artifact の本文・報告・日本語の Issue / PR 本文は [yomiyasu](https://github.com/nanaism/yomiyasu) スキルに沿って書きます。各文で誰が何をするかを明示し、比喩的な動詞や強調だけの絵文字・太字を使いません。コード・引用・シグナルの接頭辞・帰属表示は書き換えません。yomiyasu は別に入れてください。
+
+```bash
+claude plugin marketplace add nanaism/yomiyasu
+claude plugin install yomiyasu@yomiyasu
+```
+
+入っていなければ、yomiyasu の原則の一部だけを直接当てます。ほかの日本語文体スキル（`natural-japanese` など）は同時に有効にしないでください。yomiyasu の SKILL.md に、指示が干渉して出力が乱れるおそれがあると書かれています。ルールの本体は [`skills/_shared/japanese-writing.md`](skills/_shared/japanese-writing.md) です。
+
 ## 完了報告の見た目
 
 完了報告の Artifact は、[`artifact-templates`](../artifact-templates/README.ja.md) プラグインの型で作ります（実装完了報告は `implementation`、レビュー指摘は `review`、Issue の判断まとめは `investigation-report`）。対応表は [`skills/_shared/artifact-templates.md`](skills/_shared/artifact-templates.md) です。プラグインが入っていなければ `artifact-design` スキルだけで作ります。
@@ -134,6 +145,7 @@ Claude Code が自動で付けるセッション名は **英語の kebab-case �
 
 - **外部レビュー CLI**（`codex` 等）— あればレビューと調査を委譲してトークンを節約します。無ければレンズを分けた複数のサブエージェントで代替します（**単独読みには落としません**）
 - **Notion MCP** — あれば Notion ページもチケットとして扱えます
+- **[yomiyasu](https://github.com/nanaism/yomiyasu)** — 入っていれば日本語の文章をこれに沿って書きます（上記）
 
 ### 検証コマンドは自動で決めます
 
