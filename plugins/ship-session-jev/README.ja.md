@@ -149,6 +149,7 @@ API キー・リクエスト本文・レスポンス本文・依頼文は、ロ�
 - このプラグインのゲート hook は `ship-session-jev`（スラッシュコマンドと `Skill` ツール）にだけ反応し、`ship-session` の hook は `ship-session` にだけ反応します。状態ディレクトリも別（`ship-gate-jev/` と `ship-gate/`）なので、互いの判定を共有したり上書きしたりしません
 - セッション名の促し（`UserPromptSubmit`）は `ship-session` の担当のままです。このプラグイン自身の `UserPromptSubmit` hook は自分のスラッシュコマンドだけを見て、それ以外では何も出しません
 - `create-issue` / `issue-loop` / `code-review` は同梱していません。`ship-session:create-issue` と `ship-session:issue-loop` を呼ぶので、`ship-session` が入っていないと Phase 1 で止まります
+- 日本語の文章は `ship-session` と同じく [yomiyasu](https://github.com/nanaism/yomiyasu) スキルに沿って書きます（ルール: [`skills/_shared/japanese-writing.md`](skills/_shared/japanese-writing.md)）。`claude plugin marketplace add nanaism/yomiyasu` と `claude plugin install yomiyasu@yomiyasu` で入れてください
 
 ## テスト
 

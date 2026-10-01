@@ -16,6 +16,7 @@ Everything addressed to the user, and every string in the page, is in the user's
 - **In the user's language**: the `<title>`, the body, the `description` parameter, UI strings in the page (labels, pills, `alt`, captions), and questions you ask
 - **Do not translate**: code, commands, paths, identifiers
 - Put the code of the language you decided on the page wrapper (`lang="ja"` for Japanese, `lang="en"` for English)
+- **Japanese text follows the [`yomiyasu`](https://github.com/nanaism/yomiyasu) skill.** Load it once before writing the page and write the body in its style. Where it and the `### Writing` list in `DESIGN.md` disagree on a Japanese sentence (for example a colon at the end of a sentence), yomiyasu wins. If it is not installed, the `### Writing` list alone applies. Do not load another Japanese style skill such as `natural-japanese` alongside it
 
 ## Step 1: Pick the type
 

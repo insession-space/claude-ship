@@ -39,6 +39,7 @@ Pages are written in your language (Claude Code's `language` setting, otherwise 
 - **No slop.** Drawing on [taste-skill](https://github.com/Leonxlnx/taste-skill): no gradients, emoji, cards around everything, three equal cards, split headers, hairlines under every row, numbered labels, div-drawn fake screenshots, stock phrases, dashes, or perfect-looking numbers nobody measured. Headings state conclusions; numbers and names replace adjectives
 - **Works with the `artifact-design` skill**, which holds the page contract (CDN, size, theming). This plugin only adds the per-purpose types
 - **No type fits** (games, tools): no template is forced
+- **Japanese text follows [yomiyasu](https://github.com/nanaism/yomiyasu)** when it is installed (`claude plugin marketplace add nanaism/yomiyasu`, then `claude plugin install yomiyasu@yomiyasu`). For Japanese sentences it wins over the `### Writing` list
 
 ## Relation to ship-session
 

@@ -78,6 +78,12 @@ else
 fi
 has "共通ファイル user-language.md を参照している" "$SHIP" 'skills/_shared/user-language\.md'
 [ -f "$ROOT/skills/_shared/user-language.md" ] && ok "user-language.md が同梱されている" || ng "user-language.md が同梱されている"
+has "user-language.md から japanese-writing.md を参照している" "$ROOT/skills/_shared/user-language.md" 'japanese-writing\.md'
+# ship-session 本体と同じ中身（片方だけ直して食い違わないように）
+cmp -s "$ROOT/skills/_shared/japanese-writing.md" "$ROOT/../ship-session/skills/_shared/japanese-writing.md" \
+  && ok "japanese-writing.md が ship-session と同一" || ng "japanese-writing.md が ship-session と同一"
+cmp -s "$ROOT/skills/_shared/user-language.md" "$ROOT/../ship-session/skills/_shared/user-language.md" \
+  && ok "user-language.md が ship-session と同一" || ng "user-language.md が ship-session と同一"
 has "共通ファイル artifact-images.md を参照している" "$SHIP" 'skills/_shared/artifact-images\.md'
 [ -f "$ROOT/skills/_shared/artifact-images.md" ] && ok "artifact-images.md が同梱されている" || ng "artifact-images.md が同梱されている"
 has "共通ファイル artifact-templates.md を参照している" "$SHIP" 'skills/_shared/artifact-templates\.md'

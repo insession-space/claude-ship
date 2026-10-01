@@ -186,6 +186,20 @@ has "GitHub に残すものはリポジトリの慣習に従う" "$LANGF" "Follo
 has "ゲートが自動記録する header が書かれている" "$LANGF" "Goal., .Approach., .到達点., or .進め方."
 
 echo
+echo "日本語の文章: yomiyasu に沿って書く"
+JAF="$ROOT/skills/_shared/japanese-writing.md"
+[ -f "$JAF" ] && ok "japanese-writing.md が同梱されている" || ng "japanese-writing.md が同梱されている"
+has "user-language.md から参照している" "$LANGF" 'japanese-writing\.md'
+has "yomiyasu スキルを読み込む" "$JAF" 'Load the .yomiyasu. skill'
+has "対象の節がある" "$JAF" "^## What it covers"
+has "対象外の節がある" "$JAF" "^## What it leaves alone"
+has "帰属表示を書き換えない" "$JAF" "Attribution lines"
+has "類似スキルと併用しない" "$JAF" "Do not use another Japanese style skill"
+has "未導入時のフォールバックがある" "$JAF" "^## When it is not installed"
+has "README（英）に導入手順がある" "$ROOT/README.md" "claude plugin install yomiyasu@yomiyasu"
+has "README（日）に導入手順がある" "$ROOT/README.ja.md" "claude plugin install yomiyasu@yomiyasu"
+
+echo
 echo "ユーザーの言語: 各スキルからの参照"
 has "ship-session が共通ファイルを参照している" "$SHIP" 'skills/_shared/user-language\.md'
 has "ship-session にユーザーの言語の節がある" "$SHIP" "^## Use the user's language"

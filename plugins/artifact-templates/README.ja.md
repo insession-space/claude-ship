@@ -39,6 +39,7 @@ claude plugin install artifact-templates@claude-ship
 - **AI 臭さを消す。** [taste-skill](https://github.com/Leonxlnx/taste-skill) を参考に、グラデーション・絵文字・全部カード・均等3カード・左右分割の見出し・全行の罫線・番号付きラベル・div で描いた偽スクショ・定型句・ダッシュ・測っていない綺麗な数字を禁止し、見出しに結論を、形容詞の代わりに数字と固有名を書きます
 - **`artifact-design` スキルと併用します。** ページの契約（CDN・サイズ・テーマ）はそちらが持ち、このプラグインは用途ごとの型を足すだけです
 - **どの型にも当てはまらないもの**（ゲーム・ツールなど）には型を使いません
+- **日本語の文章は [yomiyasu](https://github.com/nanaism/yomiyasu) に沿って書きます**（入っている場合。`claude plugin marketplace add nanaism/yomiyasu` のあと `claude plugin install yomiyasu@yomiyasu`）。日本語の文では `### Writing` の一覧より yomiyasu を優先します
 
 ## ship-session との関係
 
