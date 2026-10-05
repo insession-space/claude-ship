@@ -87,7 +87,7 @@ While ship-session runs, a band above the prompt input shows how far it has got.
 - **Reviews**: how many times `code-review` ran during the implementation loop
 - **Gate**: when the Phase 0 gate blocks a tool, the band names the tool and a toast appears. The line goes away once the goal is recorded
 
-The band appears only after ship-session starts (`/ship-session:ship-session` typed at the prompt, or the Skill tool), and a new start resets it. Collapse it with `[-]` or ctrl+x ctrl+a. Its language follows Claude Code's `language` setting, then the language of your latest message, then English.
+The band appears only after ship-session starts (`/ship-session:ship-session` typed at the prompt, or the Skill tool), and a new start resets it. Collapse it with `[-]` or ctrl+x ctrl+a. When another mod, such as agent-cast, also draws a band above the prompt, both bands are stacked vertically. Its language follows Claude Code's `language` setting, then the language of your latest message, then English.
 
 It is drawn in the terminal and in the desktop app's Code tab. VS Code and mobile do not draw this band. A Claude Code version without mods does not read `modules` and runs the gate and session-naming hooks as before.
 
