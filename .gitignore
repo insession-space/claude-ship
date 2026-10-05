@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+# Claude Code が mod を読み込んだときに置く、エディタ用の tsconfig（.claude-plugin/types/ を参照する）
+plugins/*/tsconfig.json

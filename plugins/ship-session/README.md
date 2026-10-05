@@ -69,6 +69,28 @@ Phase 0 is not just an instruction in SKILL.md; **a hook enforces it mechanicall
 
 State is kept in `~/.claude/cache/ship-gate/<pid>.json`, and leftovers from a different session are never used as grounds for blocking. If the check itself fails, it **always lets the call through** (the gate is an added safeguard, not something that should stop the user's work). Sessions that do not use ship-session are left untouched.
 
+### Progress band above the prompt
+
+While ship-session runs, a band above the prompt input shows how far it has got. It is a Claude Code mod (a hooks module, `hooks/ship-band.tsx`, listed under `modules` in `hooks/hooks.json`).
+
+```
+╭──────────────────────────────────────────────────────────────╮
+│ ship-session                                  Goal  Up to PR │
+│ ✔ Goal  ✔ Issue  ▶ Implementation loop  ○ Next step          │
+│ Issue #42   PR not yet   2 reviews                           │
+│  Gate  Stopped Read because the goal is not decided yet      │
+╰──────────────────────────────────────────────────────────────╯
+```
+
+- **Goal and steps**: the goal agreed in Phase 0, the steps already done, and the current step highlighted
+- **Issue / PR**: the numbers taken from the URLs that `gh issue create` / `gh pr create` print. Nothing is shown when the command fails or prints no URL
+- **Reviews**: how many times `code-review` ran during the implementation loop
+- **Gate**: when the Phase 0 gate blocks a tool, the band names the tool and a toast appears. The line goes away once the goal is recorded
+
+The band appears only after ship-session starts (`/ship-session:ship-session` typed at the prompt, or the Skill tool), and a new start resets it. Collapse it with `[-]` or ctrl+x ctrl+a. Its language follows Claude Code's `language` setting, then the language of your latest message, then English.
+
+It is drawn in the terminal and in the desktop app's Code tab. VS Code and mobile do not draw this band. A Claude Code version without mods does not read `modules` and runs the gate and session-naming hooks as before.
+
 ## Speaks the user's language
 
 The skill bodies are written in English, but **everything addressed to the user is written in the user's language**: `AskUserQuestion` questions and options, progress and completion reports, and Artifacts (title, body, and UI strings inside the page).
