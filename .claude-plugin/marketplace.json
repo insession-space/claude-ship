@@ -25,6 +25,11 @@
       "name": "artifact-templates",
       "source": "./plugins/artifact-templates",
       "description": "Design templates for Artifacts, picked by purpose: a plan becomes a landing page, a review a technical report, an investigation a report or a dashboard, shipped work an implementation report. One dark-first base and a no-slop list keep pages consistent."
+    },
+    {
+      "name": "agent-cast",
+      "source": "./plugins/agent-cast",
+      "description": "A mod that shows each running subagent and teammate as a character: one row per agent in a band above the prompt (face, type, task, current tool, elapsed time), and their faces at the head of the spinner line. Each agent type has its own face."
     }
   ]
 }

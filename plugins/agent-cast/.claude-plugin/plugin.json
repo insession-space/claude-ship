@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "agent-cast",
+  "version": "0.1.0",
+  "description": "While subagents and teammates run, shows each one as a character: one row per agent in a band above the prompt (face, type, task, current tool, elapsed time), and their faces at the head of the spinner line. Each agent type has its own face.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": ["mod", "subagent", "ui", "band", "spinner"],
+  "types": "./types/index.d.ts"
+}

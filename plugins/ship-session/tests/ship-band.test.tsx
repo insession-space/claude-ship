@@ -40,6 +40,14 @@ const answerSkills = (on: On) => {
   on('prompt.submit', (_$, e) => ({ text: e.text }))
 }
 
+/** バンドの下でエンジンが描くもの（何も出さない）。バンドはこの描画の下に自分を並べる。 */
+const answerEngineBand = (on: On) => {
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+}
+
 const bash = ($: Engine, command: string) => $.tool.call({ tool: 'Bash', command })
 const skill = ($: Engine, name: string) => $.tool.call({ tool: 'Skill', skill: name })
 const typed = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
@@ -78,6 +86,18 @@ describe('ship-session のバンド', () => {
       expect(await bandText($, surface)).toBe('engine')
     })
 
+    test(`${surface}: 下で描かれたバンド（他のプラグインやエンジン）の下に並べる`, async ($, on) => {
+      answerSkills(on)
+      on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+        const { Text } = $.ui.resolve(e)
+        return <Text>other band</Text>
+      })
+      await skill($, 'ship-session:ship-session')
+      const text = await bandText($, surface)
+      expect(text.startsWith('other band | ')).toBe(true)
+      expect(text).toContain('▶ Goal')
+    })
+
     test(`${surface}: 到達点 → Issue → 実装ループ → PR の順に表示が変わる`, async ($, on) => {
       answerBash(on, {
         [`${GOAL_SCRIPT} record`]: { stdout: 'Recorded the goal: Up to PR' },
@@ -85,6 +105,7 @@ describe('ship-session のバンド', () => {
         'gh pr create': { stdout: 'https://github.com/acme/app/pull/43\n' },
       })
       answerSkills(on)
+      answerEngineBand(on)
 
       // ユーザーがスラッシュコマンドで起動した場合（Skill ツールを通らない）
       await typed($, '/ship-session:ship-session make the search faster')
@@ -116,6 +137,7 @@ describe('ship-session のバンド', () => {
         'gh pr create': { stdout: 'no URL in this output' },
       })
       answerSkills(on)
+      answerEngineBand(on)
 
       await skill($, 'ship-session:ship-session')
       await bash($, 'gh issue create --title x --body y')
@@ -128,6 +150,7 @@ describe('ship-session のバンド', () => {
     test(`${surface}: ゲートがツールを止めたら理由を出し、到達点が決まったら消す`, async ($, on) => {
       answerBash(on, { [`${GOAL_SCRIPT} record`]: { stdout: 'Recorded the goal: Up to PR' } })
       answerSkills(on)
+      answerEngineBand(on)
       on('tool.call', { tool: 'Read' }, () => ({ result: 'unused', text: 'unused' }))
       // ship-gate.py が exit 2 で止めたときと同じ形（classic の PreToolUse の block）
       on('classic.PreToolUse', (_$, e, next) =>
@@ -145,6 +168,7 @@ describe('ship-session のバンド', () => {
 
     test(`${surface}: 到達点の質問の回答と、日本語のプロンプトで表示を切り替える`, async ($, on) => {
       answerSkills(on)
+      answerEngineBand(on)
       on('tool.call', { tool: 'AskUserQuestion' }, (_$, e) => ({
         result: { questions: e.questions, answers: { 'どこまで進めますか？': 'PR まで（推奨）' } },
         text: 'answered',
@@ -176,6 +200,7 @@ describe('ship-session のバンド', () => {
 
     test(`${surface}: header をキーにした回答からも到達点を取る`, async ($, on) => {
       answerSkills(on)
+      answerEngineBand(on)
       on('tool.call', { tool: 'AskUserQuestion' }, (_$, e) => ({
         result: { questions: e.questions, answers: { Goal: 'Up to merge' } },
         text: 'answered',
@@ -205,6 +230,7 @@ describe('ship-session のバンド', () => {
         'gh issue create': { stdout: 'https://github.com/acme/app/issues/7' },
       })
       answerSkills(on)
+      answerEngineBand(on)
 
       await skill($, 'ship-session:ship-session')
       await bash($, `${GOAL_SCRIPT} record "Issue only"`)

@@ -132,52 +132,57 @@ export const register: Register = on => {
     const p = await read($, progress)
     if (e.props.hasSurvey || p === null) return next(e)
 
+    // 他のプラグイン（agent-cast の子エージェントのバンドなど）が描くものの下に並べる
+    const below = await next(e)
     const { Box, Text } = $.ui.resolve(e)
     const l = LABELS[(await read($, lang)) ?? 'en']
     const step = currentStep(p)
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Box justifyContent="space-between">
-          <Text bold color="cyan">
-            {l.title}
-          </Text>
-          <Text>
-            <Text dimColor>{l.goal} </Text>
-            <Text bold>{p.goal ?? '…'}</Text>
-          </Text>
-        </Box>
-        <Box flexWrap="wrap" columnGap={2}>
-          {l.steps.map((label, i) =>
-            i < step ? (
-              <Text color="green">✔ {label}</Text>
-            ) : i === step ? (
-              <Text bold color="black" backgroundColor="yellow">
-                {' '}▶ {label}{' '}
+      <Box flexDirection="column">
+        {below}
+        <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+          <Box justifyContent="space-between">
+            <Text bold color="cyan">
+              {l.title}
+            </Text>
+            <Text>
+              <Text dimColor>{l.goal} </Text>
+              <Text bold>{p.goal ?? '…'}</Text>
+            </Text>
+          </Box>
+          <Box flexWrap="wrap" columnGap={2}>
+            {l.steps.map((label, i) =>
+              i < step ? (
+                <Text color="green">✔ {label}</Text>
+              ) : i === step ? (
+                <Text bold color="black" backgroundColor="yellow">
+                  {' '}▶ {label}{' '}
+                </Text>
+              ) : (
+                <Text dimColor>○ {label}</Text>
+              ),
+            )}
+          </Box>
+          <Box columnGap={3}>
+            <Text>
+              Issue <Text bold>{p.issue === null ? l.none : `#${p.issue}`}</Text>
+            </Text>
+            <Text>
+              PR <Text bold>{p.pr === null ? l.none : `#${p.pr}`}</Text>
+            </Text>
+            {p.phase >= 2 && <Text dimColor>{l.reviews(p.reviews)}</Text>}
+          </Box>
+          {p.gate !== null && (
+            <Box columnGap={1}>
+              <Text bold color="black" backgroundColor="red">
+                {' '}
+                {l.gate}{' '}
               </Text>
-            ) : (
-              <Text dimColor>○ {label}</Text>
-            ),
+              <Text color="red">{l.gateText(p.gate)}</Text>
+            </Box>
           )}
         </Box>
-        <Box columnGap={3}>
-          <Text>
-            Issue <Text bold>{p.issue === null ? l.none : `#${p.issue}`}</Text>
-          </Text>
-          <Text>
-            PR <Text bold>{p.pr === null ? l.none : `#${p.pr}`}</Text>
-          </Text>
-          {p.phase >= 2 && <Text dimColor>{l.reviews(p.reviews)}</Text>}
-        </Box>
-        {p.gate !== null && (
-          <Box columnGap={1}>
-            <Text bold color="black" backgroundColor="red">
-              {' '}
-              {l.gate}{' '}
-            </Text>
-            <Text color="red">{l.gateText(p.gate)}</Text>
-          </Box>
-        )}
       </Box>
     )
   })
