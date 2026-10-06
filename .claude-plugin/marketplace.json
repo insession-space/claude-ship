@@ -35,6 +35,11 @@
       "name": "acceptance-progress",
       "source": "./plugins/acceptance-progress",
       "description": "A mod that shows the progress of the issue you are working on: when the agent reads or edits a GitHub issue with gh, it reads the issue's checklists back from GitHub and shows above the prompt how many acceptance criteria are done and which remain."
+    },
+    {
+      "name": "session-dashboard",
+      "source": "./plugins/session-dashboard",
+      "description": "A mod that shows the session at a glance in one pane: what needs attention, ship-session and acceptance progress, the current branch's PR (CI, review, unresolved threads), and the servers and containers started in this session. It also blocks mass-kill commands such as pkill -f, killall and docker stop $(docker ps -q)."
     }
   ]
 }

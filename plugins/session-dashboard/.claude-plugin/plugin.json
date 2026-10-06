@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "session-dashboard",
+  "version": "0.1.0",
+  "description": "A mod that shows the session at a glance in one pane: what needs attention, ship-session and acceptance progress, the current branch's PR (CI, review, unresolved threads), and the servers and containers started in this session. It also blocks mass-kill commands such as pkill -f, killall and docker stop $(docker ps -q).",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": ["mod", "dashboard", "pane", "github", "pull-request", "ci", "ui"],
+  "types": "./types/index.d.ts"
+}
