@@ -35,6 +35,11 @@
       "name": "acceptance-progress",
       "source": "./plugins/acceptance-progress",
       "description": "A mod that shows the progress of the issue you are working on: when the agent reads or edits a GitHub issue with gh, it reads the issue's checklists back from GitHub and shows above the prompt how many acceptance criteria are done and which remain."
+    },
+    {
+      "name": "yomiyasu-gate",
+      "source": "./plugins/yomiyasu-gate",
+      "description": "A mod that runs the yomiyasu linter on the Japanese body of gh pr / gh issue create, edit and comment and of git commit before the Bash tool runs them, and sends the command back to the agent with the offending lines when the text breaks the rules. Fail-open: without the linter it lets everything through."
     }
   ]
 }
