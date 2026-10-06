@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "acceptance-progress",
+  "version": "0.1.0",
+  "description": "A mod that shows the progress of the issue you are working on: when the agent reads or edits a GitHub issue with gh, it reads the issue's checklists (- [ ] / - [x]) back from GitHub and shows how many acceptance criteria are done and which remain.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": ["mod", "github", "issue", "acceptance-criteria", "checklist", "ui"],
+  "types": "./types/index.d.ts"
+}

@@ -24,6 +24,7 @@ Restart Claude Code and it is ready to use.
 | `graph-workflow` | Breaks a task down into a graph of nodes and edges and runs it deterministically in parallel with the Workflow tool (design → approval → run → resume) | [plugins/graph-workflow](plugins/graph-workflow/README.md) |
 | `artifact-templates` | Picks an Artifact design template by purpose (plan → landing page, review → technical report, investigation → report or dashboard, shipped work → implementation report), with one dark-first base and a no-slop list | [plugins/artifact-templates](plugins/artifact-templates/README.md) |
 | `agent-cast` | A mod that, while subagents and teammates run, shows one row per agent above the prompt (character face, type, task, current tool, elapsed time) and lines their faces up at the head of the spinner line. Each agent type has its own face | [plugins/agent-cast](plugins/agent-cast/README.md) |
+| `acceptance-progress` | A mod that reads the checklists back from the GitHub issue the agent touched with gh, and shows above the prompt how many acceptance criteria are done and which remain | [plugins/acceptance-progress](plugins/acceptance-progress/README.md) |
 
 ## Repository layout
 
