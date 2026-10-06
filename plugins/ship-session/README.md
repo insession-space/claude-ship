@@ -57,6 +57,8 @@ There are four goal options: Up to PR (Recommended) / Up to merge / Implementati
 
 It loops until all three hold. If it hits the limit (5 rounds by default), it lists the remaining gaps and stops.
 
+For a GitHub Issue, it ticks the checkbox of each acceptance criterion in the Issue body as soon as verification shows the criterion is met. It fetches, edits and writes back the body in one command, so it is unlikely to overwrite other people's edits with an old copy (an edit made in those few seconds is not protected). Install the [acceptance-progress](../acceptance-progress/README.md) mod to see that progress above the prompt too.
+
 ### Phase 0 is enforced by a hook
 
 Phase 0 is not just an instruction in SKILL.md; **a hook enforces it mechanically**. (In past measurements, every session that ran Phase 0 reached the implementation loop, and every session that skipped it stalled silently partway through.)

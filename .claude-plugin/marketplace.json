@@ -30,6 +30,11 @@
       "name": "agent-cast",
       "source": "./plugins/agent-cast",
       "description": "A mod that shows each running subagent and teammate as a character: one row per agent in a band above the prompt (face, type, task, current tool, elapsed time), and their faces at the head of the spinner line. Each agent type has its own face."
+    },
+    {
+      "name": "acceptance-progress",
+      "source": "./plugins/acceptance-progress",
+      "description": "A mod that shows the progress of the issue you are working on: when the agent reads or edits a GitHub issue with gh, it reads the issue's checklists back from GitHub and shows above the prompt how many acceptance criteria are done and which remain."
     }
   ]
 }
