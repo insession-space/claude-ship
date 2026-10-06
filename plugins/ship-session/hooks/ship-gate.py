@@ -26,10 +26,15 @@ import sys
 
 HOME = os.path.expanduser("~/.claude")
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
+GOAL_SCRIPT = os.path.join(HOOKS_DIR, "ship-goal.sh")
 STATE_DIR = os.path.join(HOME, "cache", "ship-gate")
 
 #: ゲートを張る対象のスキル名（`plugin:skill` の skill 側）
 SHIP_SKILL = "ship-session"
+
+#: ユーザーが入力欄で打つ起動コマンド。スラッシュコマンドは Skill ツールを通らずに
+#: 展開されるので、PreToolUse では見えない。UserPromptSubmit でこれを見て張る
+SLASH_COMMANDS = ("/ship-session:ship-session", "/ship-session")
 
 #: 到達点を聞く質問の header（SKILL.md / skills/_shared/user-language.md と揃える）。
 #: 質問はユーザーの言語で出すので、英語と日本語の両方を持つ。
@@ -197,7 +202,6 @@ def block_message():
     読むのはエージェントなので英語で書く（ユーザーに見せる前提ではない）。
     ユーザーへの質問は、ここに書いた header をユーザーの言語に訳して出す。
     """
-    goal_script = os.path.join(HOOKS_DIR, "ship-goal.sh")
     return (
         "[ship-gate] The goal is not decided yet. ship-session cannot use other tools "
         "until Phase 0 fixes the goal (Up to PR / Up to merge / Implementation only / "
@@ -210,8 +214,122 @@ def block_message():
         '`"%s" record "<answer>"` with the user\'s answer now.\n'
         "- If the request is not shippable (a plain question, investigation only, fixing "
         "an existing PR), ask with header: Approach instead."
-        % (goal_script, " / ".join(GOAL_HEADERS), goal_script)
+        % (GOAL_SCRIPT, " / ".join(GOAL_HEADERS), GOAL_SCRIPT)
     )
+
+
+def slash_command_args(prompt):
+    """ユーザーの入力が ship-session の起動コマンドなら、その引数を返す（無ければ ""）。
+
+    起動コマンドでなければ None。生の入力（`/ship-session:ship-session <依頼>`）と、
+    展開済みの形（`<command-name>/ship-session:ship-session</command-name>` +
+    `<command-args>…</command-args>`）の両方を見る。どちらが hook に渡るかは
+    Claude Code の版に依るので、両方に備える（ship-session-jev と同じ規則）
+    """
+    text = str(prompt or "").lstrip()
+    for cmd in SLASH_COMMANDS:
+        if text == cmd:
+            return ""
+        if text.startswith(cmd) and text[len(cmd)].isspace():
+            return text[len(cmd):].strip()
+    # ほとんどのプロンプトはここで返す（下の正規表現はどちらも `<command-` で始まる）
+    if not text.startswith("<command-"):
+        return None
+    import re
+
+    # 展開済みの形は **先頭で** 照合する。文中に現れただけ（貼り付けた transcript に
+    # ついての質問など）で張ると、スキルを呼んでいないセッションを止めてしまう
+    name = re.match(
+        r"(?:<command-message>[^<]*</command-message>\s*)?"
+        r"<command-name>\s*(/ship-session(?::ship-session)?)\s*</command-name>",
+        text,
+    )
+    if name:
+        args = re.search(r"<command-args>(.*?)</command-args>", text[name.end():], re.S)
+        return args.group(1).strip() if args else ""
+    return None
+
+
+def args_digest(args):
+    """依頼文の指紋。同じ文で打ち直していないかを見るためだけに使う（文は残さない）。
+
+    空白の違い（末尾の改行・連続空白）で別の文と見なさないよう、空白を畳んでから
+    ハッシュする
+    """
+    import hashlib
+
+    normalized = " ".join(str(args or "").split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def armed_context():
+    """スラッシュコマンドで張ったとき、エージェントに渡す additionalContext。"""
+    return (
+        "[ship-gate] The Phase 0 gate is armed for this ship-session run. Before any other "
+        "tool, fix the goal: run `\"%s\" record \"<goal>\"` if the message states it, "
+        "otherwise ask with `AskUserQuestion` (header: Goal, or Approach for a request that "
+        "is not shippable) in the user's language." % GOAL_SCRIPT
+    )
+
+
+def recorded_context(state):
+    """到達点が記録済みのセッションで、依頼文の無いコマンドが来たときの additionalContext。"""
+    return (
+        "[ship-gate] A goal is already recorded in this session: %s. This command came "
+        "without a request text, so it is unclear whether this is the same task. If the user "
+        "is starting a new request, fix its goal first (ask with `AskUserQuestion` header: "
+        'Goal, or run `"%s" record "<goal>"`); if it is the same task, continue.'
+        % (state.get("goal"), GOAL_SCRIPT)
+    )
+
+
+def print_context(context):
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": context,
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+def handle_user_prompt_submit(payload):
+    """ユーザーがスラッシュコマンドで起動したときにゲートを張る。それ以外は何も出さない。"""
+    args = slash_command_args(payload.get("prompt"))
+    if args is None:
+        return
+    session_id = str(payload.get("session_id") or "")
+    pid = resolve_pid(session_id)
+    if not pid:
+        return
+    state = read_state(pid)
+    # slash_command_args は前後の空白を落として返すので、args の真偽で依頼文の有無が分かる
+    if state and state.get("session_id") in ("", None, session_id):
+        if state.get("phase") == "pending":
+            # 張ってある。依頼文の指紋だけ今の文に合わせる
+            if args and state.get("args_digest") != args_digest(args):
+                state["args_digest"] = args_digest(args)
+                write_state(pid, state)
+            print_context(armed_context())
+            return
+        if state.get("phase") == "active":
+            if not args:
+                print_context(recorded_context(state))
+                return
+            if state.get("args_digest") == args_digest(args):
+                # 同じ依頼の打ち直し。張り直すと合意が消えるので触らない
+                return
+            # 別の依頼文（または Skill ツールで始めた依頼への依頼文付きのコマンド）は
+            # 次の依頼。前の到達点を引き継ぐと「Issue だけ」の依頼でマージまで行く
+    new_state = {"phase": "pending", "session_id": session_id}
+    if args:
+        new_state["args_digest"] = args_digest(args)
+    if write_state(pid, new_state):
+        print_context(armed_context())
 
 
 def handle_pre_tool_use(payload):
@@ -225,8 +343,13 @@ def handle_pre_tool_use(payload):
         if not pid:
             return
         state = read_state(pid)
-        if state and state.get("session_id") == session_id and state.get("phase") == "active":
-            # 到達点が決まった後の再 invoke。張り直すと合意が消えるので触らない
+        if (
+            state
+            and state.get("session_id") == session_id
+            and state.get("phase") in ("active", "pending")
+        ):
+            # 到達点が決まった後の再 invoke と、スラッシュコマンドで張った後の
+            # invoke。張り直すと合意や依頼文の指紋が消えるので触らない
             return
         write_state(pid, {"phase": "pending", "session_id": session_id})
         return
@@ -306,7 +429,9 @@ def handle_post_tool_use(payload):
     goal = extract_goal(payload.get("tool_input"), payload.get("tool_response"))
     if not goal:
         return
-    write_state(pid, {"phase": "active", "goal": goal, "session_id": session_id})
+    # 依頼文の指紋（args_digest）は残す。同じ依頼の打ち直しを見分けるのに使う
+    state.update({"phase": "active", "goal": goal, "session_id": session_id})
+    write_state(pid, state)
 
 
 def main():
@@ -321,6 +446,8 @@ def main():
         handle_pre_tool_use(payload)
     elif event == "PostToolUse":
         handle_post_tool_use(payload)
+    elif event == "UserPromptSubmit":
+        handle_user_prompt_submit(payload)
 
 
 if __name__ == "__main__":

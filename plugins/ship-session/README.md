@@ -61,7 +61,10 @@ It loops until all three hold. If it hits the limit (5 rounds by default), it li
 
 Phase 0 is not just an instruction in SKILL.md; **a hook enforces it mechanically**. (In past measurements, every session that ran Phase 0 reached the implementation loop, and every session that skipped it stalled silently partway through.)
 
-1. Invoking ship-session makes the `PreToolUse` hook (`hooks/ship-gate.py`) set up a gate
+1. Invoking ship-session sets up a gate (`hooks/ship-gate.py`). Both ways of starting it are covered
+   - Typing `/ship-session:ship-session` (or `/ship-session`) at the prompt: the `UserPromptSubmit` hook sets up the gate and tells the agent to fix the goal first. A mere mention of the command inside a sentence does not count
+   - The agent calling the Skill tool: the `PreToolUse` hook sets up the gate
+   - If the goal is already recorded and you type the command again with a **different request**, it is treated as a new request and the gate is set up again. The same request text, or the command alone, keeps the recorded goal. Only a fingerprint of the request text is stored, never the text itself
 2. Until the goal is recorded, every tool call other than `AskUserQuestion`, session renaming, and the recording script is **blocked, and the agent is told what to do instead** (reading files and investigating also come after the gate)
 3. The goal is recorded in one of the following ways, which opens the gate
    - If the `AskUserQuestion` header is `Goal` / `Approach` (English) or `到達点` / `進め方` (Japanese), the hook **records the answer automatically**

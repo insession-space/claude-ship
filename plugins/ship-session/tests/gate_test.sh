@@ -47,6 +47,14 @@ run_post() {
       "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
 }
 
+# UserPromptSubmit を投げる。$1=prompt（JSON 文字列への変換はここでする）
+run_prompt() {
+  python3 -c 'import json,sys;print(json.dumps({"hook_event_name":"UserPromptSubmit","session_id":sys.argv[1],"prompt":sys.argv[2]},ensure_ascii=False))' \
+    "$SID" "$1" \
+    | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" \
+      "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+}
+
 run_goal() {
   env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" \
     "$GOAL" "$@" > "$SANDBOX/out" 2> "$SANDBOX/err"
@@ -206,6 +214,103 @@ run_goal record "PR 생성까지"; check "ほかの言語の到達点も record 
 check "record 後は active" "$(state_field phase)" "active"
 check "ほかの言語の到達点がそのまま goal になる" "$(state_field goal)" "PR 생성까지"
 run_pre "Bash" '{"command":"ls"}'; check "record 後は Bash が通る" "$?" "0"
+
+echo
+echo "スラッシュコマンドで起動してもゲートを張る"
+setup
+run_prompt '/ship-session:ship-session 検索を速くしたい'; check "UserPromptSubmit は通る" "$?" "0"
+check "スラッシュコマンドで pending になる" "$(state_field phase)" "pending"
+check "session_id が記録される" "$(state_field session_id)" "$SID"
+grep -q "additionalContext" "$SANDBOX/out" && ok "張ったことを additionalContext で伝える" || ng "張ったことを additionalContext で伝える"
+grep -q "ship-goal.sh" "$SANDBOX/out" && ok "additionalContext が記録スクリプトを案内する" || ng "additionalContext が記録スクリプトを案内する"
+run_pre "Read" '{"file_path":"/tmp/x"}'; check "続く Read はブロック" "$?" "2"
+arm; check "続けて Skill ツールで呼んでも通る" "$?" "0"
+check "Skill ツールで呼んでも pending のまま" "$(state_field phase)" "pending"
+setup
+run_prompt '/ship-session 検索を速くしたい'
+check "プラグイン名を省いた /ship-session でも張る" "$(state_field phase)" "pending"
+setup
+run_prompt '/ship-session:ship-session'
+check "依頼文の無いコマンドでも張る" "$(state_field phase)" "pending"
+setup
+run_prompt '<command-message>ship-session:ship-session</command-message>
+<command-name>/ship-session:ship-session</command-name>
+<command-args>検索を速くしたい</command-args>'
+check "展開済みの形でも張る" "$(state_field phase)" "pending"
+
+echo
+echo "スラッシュコマンドでない入力では張らない"
+for prompt in \
+  '`/ship-session:ship-session` の使い方を教えて' \
+  'このログを見て <command-name>/ship-session:ship-session</command-name>' \
+  '/ship-session:create-issue 検索を速くしたい' \
+  '/ship-session-jev:ship-session-jev 検索を速くしたい' \
+  '/ship-sessionx 検索' \
+  '検索を速くしたい'; do
+  setup
+  run_prompt "$prompt"
+  [ ! -f "$(STATE_FILE)" ] && ok "張らない: ${prompt%%$'\n'*}" || ng "張らない: ${prompt%%$'\n'*}"
+  [ ! -s "$SANDBOX/out" ] && ok "何も出力しない: ${prompt%%$'\n'*}" || ng "何も出力しない: ${prompt%%$'\n'*}"
+done
+setup
+printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s"}' "$SID" \
+  | env HOME="$SANDBOX" CLAUDE_CODE_MESSAGING_SOCKET="$SOCK" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+check "prompt が無い payload は素通し" "$?" "0"
+[ ! -f "$(STATE_FILE)" ] && ok "prompt が無ければ張らない" || ng "prompt が無ければ張らない"
+
+echo
+echo "到達点が決まったあとの打ち直し"
+setup
+run_prompt '/ship-session:ship-session 検索を速くしたい'
+Q='{"questions":[{"question":"どこまで進めますか？","header":"到達点","options":[],"multiSelect":false}]}'
+run_post "$Q" '{"answers":{"どこまで進めますか？":"Issue のみ"}}'
+check "回答で active になる" "$(state_field phase)" "active"
+run_prompt '/ship-session:ship-session  検索を速くしたい '
+check "同じ依頼文の打ち直しでは active のまま" "$(state_field phase)" "active"
+check "同じ依頼文なら到達点を残す" "$(state_field goal)" "Issue のみ"
+run_prompt '/ship-session:ship-session'
+check "依頼文の無い打ち直しでは active のまま" "$(state_field phase)" "active"
+grep -q "already recorded" "$SANDBOX/out" && ok "記録済みの到達点があることを伝える" || ng "記録済みの到達点があることを伝える"
+run_prompt '/ship-session:ship-session 次はログイン画面を直したい'
+check "別の依頼文なら pending に戻す" "$(state_field phase)" "pending"
+check "前の到達点を引き継がない" "$(state_field goal)" ""
+setup
+run_prompt '/ship-session:ship-session 検索を速くしたい'
+run_goal record "PR まで"
+run_prompt '/ship-session:ship-session 検索を速くしたい'
+check "record で決めた後も、同じ依頼文の打ち直しでは active のまま" "$(state_field phase)" "active"
+setup; arm
+run_goal record "PR まで"
+run_prompt '/ship-session:ship-session 検索を速くしたい'
+check "Skill ツールで始めた依頼に依頼文付きのコマンドが来たら pending に戻す" "$(state_field phase)" "pending"
+setup
+mkdir -p "$SANDBOX/.claude/cache/ship-gate"
+printf '{"phase":"active","goal":"マージまで","session_id":"s-other"}' > "$(STATE_FILE)"
+run_prompt '/ship-session:ship-session 検索を速くしたい'
+check "別セッションの残骸は上書きして張る" "$(state_field phase)" "pending"
+check "上書き後の session_id は自分のもの" "$(state_field session_id)" "$SID"
+python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if all("検索" not in str(v) for v in d.values()) else 1)' "$(STATE_FILE)" \
+  && ok "状態ファイルに依頼文を残さない" || ng "状態ファイルに依頼文を残さない"
+
+python3 -c '
+import json, sys
+hooks = json.load(open(sys.argv[1]))["hooks"]["UserPromptSubmit"]
+sys.exit(0 if any("ship-gate.py" in h.get("command", "") for g in hooks for h in g.get("hooks", [])) else 1)
+' "$ROOT/hooks/hooks.json" && ok "hooks.json の UserPromptSubmit に ship-gate.py が登録されている" \
+  || ng "hooks.json の UserPromptSubmit に ship-gate.py が登録されている"
+
+echo
+echo "スラッシュコマンドのフェイルオープン"
+setup
+printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"/ship-session:ship-session x"}' "$SID" \
+  | env -u CLAUDE_CODE_MESSAGING_SOCKET HOME="$SANDBOX" "$GATE" > "$SANDBOX/out" 2> "$SANDBOX/err"
+check "pid が引けなければ素通し" "$?" "0"
+[ ! -s "$SANDBOX/out" ] && ok "pid が引けなければ何も出力しない" || ng "pid が引けなければ何も出力しない"
+setup
+mkdir -p "$SANDBOX/.claude/cache"
+printf 'not a dir' > "$SANDBOX/.claude/cache/ship-gate"
+run_prompt '/ship-session:ship-session x'; check "状態ファイルが書けなければ素通し" "$?" "0"
+[ ! -s "$SANDBOX/out" ] && ok "状態ファイルが書けなければ何も出力しない" || ng "状態ファイルが書けなければ何も出力しない"
 
 echo
 echo "フェイルオープン"
