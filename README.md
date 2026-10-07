@@ -25,6 +25,7 @@ Restart Claude Code and it is ready to use.
 | `artifact-templates` | Picks an Artifact design template by purpose (plan → landing page, review → technical report, investigation → report or dashboard, shipped work → implementation report), with one dark-first base and a no-slop list | [plugins/artifact-templates](plugins/artifact-templates/README.md) |
 | `agent-cast` | A mod that, while subagents and teammates run, shows one row per agent above the prompt (character face, type, task, current tool, elapsed time) and lines their faces up at the head of the spinner line. Each agent type has its own face | [plugins/agent-cast](plugins/agent-cast/README.md) |
 | `acceptance-progress` | A mod that reads the checklists back from the GitHub issue the agent touched with gh, and shows above the prompt how many acceptance criteria are done and which remain | [plugins/acceptance-progress](plugins/acceptance-progress/README.md) |
+| `secret-guard` | A mod that replaces secret-shaped strings (API keys with a known prefix, PEM private keys) with `[redacted:<kind>]` in your prompt before it is sent and in the model's response before it is stored, and suggests rotating a key you pasted | [plugins/secret-guard](plugins/secret-guard/README.md) |
 
 ## Repository layout
 
