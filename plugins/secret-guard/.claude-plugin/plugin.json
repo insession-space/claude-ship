@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "secret-guard",
+  "version": "0.1.0",
+  "description": "A mod that redacts secret-shaped strings (GitHub, Anthropic, OpenAI, Google, AWS, Slack and Stripe keys, PEM private keys) to [redacted:<kind>] before they are kept in the conversation: in your prompt before it is sent, and in the model's response before it is stored.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": ["mod", "security", "secret", "redaction", "api-key"],
+  "types": "./types/index.d.ts"
+}
