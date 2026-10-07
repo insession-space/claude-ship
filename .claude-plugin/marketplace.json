@@ -45,6 +45,11 @@
       "name": "yomiyasu-gate",
       "source": "./plugins/yomiyasu-gate",
       "description": "A mod that runs the yomiyasu linter on the Japanese body of gh pr / gh issue create, edit and comment and of git commit before the Bash tool runs them, and sends the command back to the agent with the offending lines when the text breaks the rules. Fail-open: without the linter it lets everything through."
+    },
+    {
+      "name": "session-dashboard",
+      "source": "./plugins/session-dashboard",
+      "description": "A mod that shows the session at a glance in one pane: what needs attention, ship-session and acceptance progress, the current branch's PR (CI, review, unresolved threads), and the servers and containers started in this session. It also blocks mass-kill commands such as pkill -f, killall and docker stop $(docker ps -q)."
     }
   ]
 }
