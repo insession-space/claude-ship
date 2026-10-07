@@ -26,6 +26,7 @@ Claude Code を再起動すると使えます。
 | `agent-cast` | 子エージェント（サブエージェントとチームメイト）が走っている間、入力欄の上のバンドに1体1行でキャラクター・種別・説明・今のツール・経過秒を出し、スピナー行の先頭に顔を並べる mod。顔はエージェント種別ごとに決まっている | [plugins/agent-cast](plugins/agent-cast/README.ja.md) |
 | `acceptance-progress` | エージェントが gh で触った GitHub Issue の本文からチェックリストを読み直し、受け入れ条件の済んだ数と残りの項目を入力欄の上のバンドに出す mod | [plugins/acceptance-progress](plugins/acceptance-progress/README.ja.md) |
 | `secret-guard` | シークレットの形をした文字列（既知の接頭辞を持つ API キーと PEM 秘密鍵）を、入力は送信前に、モデルの返答は保存前に `[redacted:<種類>]` へ置き換える mod。貼ってしまったキーにはローテーションを勧めるトーストを出す | [plugins/secret-guard](plugins/secret-guard/README.ja.md) |
+| `yomiyasu-gate` | エージェントが PR・Issue の本文やコミットメッセージに書いた日本語を、Bash ツールが実行する前に yomiyasu のリンターで検査し、規則に合わなければ違反の行を添えて差し戻す mod。リンターが無ければ何もせずに通す | [plugins/yomiyasu-gate](plugins/yomiyasu-gate/README.ja.md) |
 
 ## リポジトリ構成
 

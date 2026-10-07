@@ -1,0 +1,58 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "yomiyasu-gate",
+  "version": "0.1.0",
+  "description": "A mod that runs the yomiyasu linter (yomiyasu_lint.py) on the Japanese body of gh pr / gh issue create, edit and comment and of git commit before the Bash tool runs them, and sends the command back to the agent with the offending lines when the text breaks the rules. Fail-open: without the linter it lets everything through.",
+  "author": {
+    "name": "Seiya Kawamura"
+  },
+  "homepage": "https://github.com/insession-space/claude-ship",
+  "repository": "https://github.com/insession-space/claude-ship",
+  "license": "MIT",
+  "keywords": ["mod", "yomiyasu", "japanese", "lint", "github", "git", "guard"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "linterPath": {
+      "type": "string",
+      "title": "Linter path",
+      "description": "Absolute path to yomiyasu_lint.py. Empty looks in the yomiyasu marketplace (~/.claude/plugins/marketplaces/yomiyasu/skills/yomiyasu/scripts/ and ~/.claude/plugins/marketplaces/yomiyasu/scripts/).",
+      "default": ""
+    },
+    "python": {
+      "type": "string",
+      "title": "Python",
+      "description": "The Python executable that runs the linter.",
+      "default": "python3"
+    },
+    "minScore": {
+      "type": "number",
+      "title": "Minimum score",
+      "description": "The body is sent back when its score (100 minus 5 per warning and 2 per info, ignored rules left out) is below this.",
+      "default": 80
+    },
+    "hardRules": {
+      "type": "string",
+      "title": "Rules that always send back",
+      "description": "Comma-separated linter rules of which a single finding sends the body back, whatever the score.",
+      "default": "emoji_prohibited,trailing_colon"
+    },
+    "ignoreRules": {
+      "type": "string",
+      "title": "Ignored rules",
+      "description": "Comma-separated linter rules left out of the score and the reason. The space between Japanese and Latin text is ignored by default, since these repositories write it.",
+      "default": "unnatural_halfwidth_space"
+    },
+    "maxDenials": {
+      "type": "number",
+      "title": "Send-backs in a row",
+      "description": "How many times in a row the same kind of command is sent back before the next run is let through with a toast. 0 never lets it through.",
+      "default": 2
+    },
+    "includeSubagents": {
+      "type": "boolean",
+      "title": "Check subagents",
+      "description": "Also check the commands subagents run.",
+      "default": true
+    }
+  }
+}
